@@ -24,6 +24,14 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Cache des modèles de traduction
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.local/share/argos-translate
+            ~/.local/cache/argos-translate
+          key: argos-models-v1
+
       - name: Dépendances
         run: pip install -r requirements.txt
 
