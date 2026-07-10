@@ -138,8 +138,10 @@ def main():
         if classify.est_banni(r["nom_du_media"], bans):
             n_ban += 1
             continue
-        # traduction rétroactive des titres non anglais encore en VO
-        if not r.get("langue"):
+        # traduction rétroactive : langue inconnue, OU non anglais pas encore
+        # traduit (on retente à chaque passage jusqu'à réussite)
+        lg = (r.get("langue") or "").strip()
+        if not lg or (lg != "en" and not (r.get("titre_vo") or "").strip()):
             t, vo, lang = traduction.ensure_english(
                 r["titre"], r["nom_du_media"], med_langues)
             r["langue"] = lang
