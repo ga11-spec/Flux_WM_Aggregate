@@ -179,11 +179,13 @@ def score_naval(title, naval_pats, cap=40):
     return min(cap, sum(w for p, w in naval_pats if p.search(t)))
 
 # ------------------------------------------------------- langue / dates / alias
-# scripts non latins : cyrillique, arabe, hébreu, CJK, coréen, thaï, devanagari…
-_NON_LATIN = re.compile(r"[Ѐ-ӿ԰-֏֐-׿؀-ۿ"
+# scripts non latins : grec, cyrillique, arabe, hébreu, CJK, coréen, thaï, devanagari…
+_NON_LATIN = re.compile(r"[Ͱ-Ͽἀ-῿Ѐ-ӿ԰-֏֐-׿؀-ۿ"
                         r"ऀ-෿฀-๿ሀ-፿぀-ヿ"
                         r"一-鿿가-힯]")
 _VIET = re.compile(r"[ăđơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]", re.I)
+# latin étendu (ő ű ł ż ś ć ș ț ř ě š č ğ ı …) : jamais utilisé en anglais
+_LATIN_EXT = re.compile(r"[Ā-ɏ]")
 _STOPS = {
     "en": {"the", "of", "to", "and", "in", "for", "on", "with", "as", "at", "by",
            "from", "is", "are", "was", "will", "after", "over", "new", "says",
@@ -194,7 +196,8 @@ _STOPS = {
     "es": {"el", "los", "las", "una", "del", "por", "para", "con", "más", "este",
            "esta", "como", "pero", "sus", "según", "tras", "entre"},
     "de": {"der", "die", "das", "und", "ist", "nicht", "mit", "für", "von", "dem",
-           "den", "ein", "eine", "auf", "wird", "nach", "über", "beim", "gegen"},
+           "den", "ein", "eine", "auf", "wird", "nach", "über", "beim", "gegen",
+           "sich", "treffen", "wurde", "noch", "auch", "oder"},
     "it": {"il", "lo", "gli", "della", "delle", "di", "che", "con", "per", "una",
            "sono", "più", "anche", "dopo", "nel", "alla"},
     "pt": {"os", "uma", "das", "dos", "não", "com", "por", "para", "mais", "como",
@@ -205,6 +208,19 @@ _STOPS = {
            "itu", "tidak"},
     "tr": {"ve", "bir", "için", "ile", "bu", "da", "de", "olarak", "sonra",
            "yeni", "daha"},
+    "hu": {"és", "hogy", "nem", "már", "csak", "még", "lesz", "szerint",
+           "után", "ellen", "miatt", "lehet", "volt", "kell", "vagy"},
+    "pl": {"nie", "się", "jest", "oraz", "przez", "które", "która", "tylko",
+           "jak", "czy", "dla", "został", "została", "będzie", "roku"},
+    "ro": {"și", "nu", "este", "pentru", "din", "cu", "mai", "care", "după",
+           "fost", "sunt", "într-un", "într-o", "despre", "către"},
+    "cs": {"není", "jsou", "jako", "pro", "podle", "které", "byl", "bude",
+           "ale", "aby", "roce"},
+    "sv": {"och", "att", "är", "för", "med", "inte", "som", "har", "ett",
+           "den", "efter", "ska", "kan", "vill", "öka", "nya", "mot"},
+    "da": {"og", "er", "til", "det", "ikke", "som", "har", "ved", "efter",
+           "kan", "skal"},
+    "fi": {"ja", "ei", "että", "joka", "mutta", "myös", "kun", "vuoden"},
 }
 
 def est_anglais(titre):
@@ -215,16 +231,39 @@ def est_anglais(titre):
         return False
     if len(_VIET.findall(t)) >= 2:
         return False
-    toks = re.findall(r"[a-zà-ÿ']+", t.lower())
+    toks = re.findall(r"[a-zà-ÿā-ɏ']+", t.lower())
     en = sum(1 for w in toks if w in _STOPS["en"])
     autres = max((sum(1 for w in toks if w in s)
                   for l, s in _STOPS.items() if l != "en"), default=0)
     if autres >= 2 and autres > en:
         return False
+    # caractères latins étendus (ő ł ș ě ğ…) : inexistants en anglais
+    ext = len(_LATIN_EXT.findall(t))
+    if ext >= 2 or (ext == 1 and en == 0):
+        return False
     # beaucoup d'accents et aucun mot-outil anglais → probablement pas anglais
     if en == 0 and len(re.findall(r"[à-ÿ]", t.lower())) >= 3:
         return False
     return True
+
+def load_bans(path):
+    """medias_bannis.txt → (exacts, préfixes). Médias écartés d'office."""
+    exact, globs = set(), []
+    if Path(path).exists():
+        for line in Path(path).read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.endswith("*"):
+                globs.append(line[:-1].rstrip())
+            else:
+                exact.add(line)
+    return exact, globs
+
+def est_banni(name, bans):
+    exact, globs = bans
+    n = str(name).strip()
+    return n in exact or any(n.startswith(p + " ") or n == p for p in globs)
 
 _DATE_FORMATS = ["%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d",
                  "%Y/%m/%d %H:%M", "%d/%m/%Y %H:%M", "%d/%m/%Y",
@@ -304,6 +343,10 @@ def main():
     rules = load_rules(HERE / "regles.txt", pays_raw)
     naval = load_naval(HERE / "naval.txt")
     alias = load_alias(HERE / "medias_alias.csv")
+    bans = load_bans(HERE / "medias_bannis.txt")
+    sys.path.insert(0, str(HERE))
+    import traduction
+    med_langues = traduction.load_medias_langues()
     regions = json.loads((HERE / "regions.json").read_text(encoding="utf-8"))
     medias = {}
     with open(HERE / "medias.csv", encoding="utf-8") as f:
@@ -321,14 +364,17 @@ def main():
                     "indice_fiabilite", "fiabilité_calcul",
                     "indice_interet_naval", "fiabilité2",
                     "intérêt marine calcul", "intérêt_par_fiabilité",
-                    "confiance_pays_article"])
-        n_lang = 0
+                    "confiance_pays_article", "langue", "titre_vo"])
+        n_ban = n_trad = 0
         for row in r:
             n_in += 1
-            titre = row.get("titre", "")
-            if not est_anglais(titre):
-                n_lang += 1
+            if est_banni(row.get("media", ""), bans):
+                n_ban += 1
                 continue
+            titre, titre_vo, lang = traduction.ensure_english(
+                row.get("titre", ""), row.get("media", ""), med_langues)
+            if titre_vo:
+                n_trad += 1
             media = canonical_media(row.get("media", ""), alias)
             m = medias.get(media.lower(), {})
             gov = ".gov" in media.lower()
@@ -355,10 +401,11 @@ def main():
                         norm_date(row.get("date", "")),
                         m.get("pays_siege", "Undetermined"), ca, rg, th,
                         m.get("theme_media", ""), m.get("note", ""),
-                        fia, fia_calc, nav, fia2, marine, composite, conf])
+                        fia, fia_calc, nav, fia2, marine, composite, conf,
+                        lang, titre_vo])
 
-    print(f"{n_in} articles | {n_lang} non anglais écartés"
-          f" | thème déterminé : {n_theme} | pays déterminé : {n_pays}")
+    print(f"{n_in} articles | {n_trad} traduits en anglais | {n_ban} doublons"
+          f" écartés | thème déterminé : {n_theme} | pays déterminé : {n_pays}")
     print(f"→ {args.out}")
 
 if __name__ == "__main__":

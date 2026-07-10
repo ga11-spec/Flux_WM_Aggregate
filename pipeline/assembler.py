@@ -22,7 +22,7 @@ COLS = ["nom_du_media", "titre", "lien", "time_stamp", "country_headquarters",
         "country_article", "region", "sujet_article", "sujet_media",
         "official_rating", "indice_fiabilite", "fiabilité_calcul",
         "indice_interet_naval", "fiabilité2", "intérêt marine calcul",
-        "intérêt_par_fiabilité", "confiance_pays_article"]
+        "intérêt_par_fiabilité", "confiance_pays_article", "langue", "titre_vo"]
 
 
 def read_csv(path):
@@ -32,7 +32,8 @@ def read_csv(path):
 
 def write_master(rows):
     with open(MASTER, "w", encoding="utf-8", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=COLS, delimiter=";")
+        w = csv.DictWriter(f, fieldnames=COLS, delimiter=";",
+                           restval="", extrasaction="ignore")
         w.writeheader()
         w.writerows(rows)
 
@@ -65,7 +66,9 @@ def build_site(rows, added=0):
                      "fi": num(r["indice_fiabilite"]),
                      "nv": num(r["indice_interet_naval"]) or 0,
                      "ip": num(r["intérêt_par_fiabilité"]),
-                     "cf": r["confiance_pays_article"]})
+                     "cf": r["confiance_pays_article"],
+                     "lg": r.get("langue") or "en",
+                     "tv": r.get("titre_vo") or ""})
     js = "window.DATA_WM=" + json.dumps(
         recs, ensure_ascii=False, separators=(",", ":")).replace(
         "</script", "<\\/script") + ";"
@@ -87,7 +90,7 @@ def build_site(rows, added=0):
                 ", ".join(f'"{c}"' for c in COLS))
     con.executemany("INSERT INTO articles VALUES (%s)" %
                     ",".join("?" * len(COLS)),
-                    [[r[c] for c in COLS] for r in rows])
+                    [[r.get(c,"") for c in COLS] for r in rows])
     con.commit()
     con.close()
 
@@ -99,11 +102,11 @@ def build_site(rows, added=0):
         ws.title = "Articles"
         ws.append(COLS)
         for r in rows:
-            ws.append([num(r[c]) if num(r[c]) is not None and
+            ws.append([num(r.get(c)) if num(r.get(c)) is not None and
                        c in ("official_rating", "indice_fiabilite",
                              "fiabilité_calcul", "indice_interet_naval",
                              "fiabilité2", "intérêt marine calcul",
-                             "intérêt_par_fiabilité") else r[c] for c in COLS])
+                             "intérêt_par_fiabilité") else r.get(c,"") for c in COLS])
         wb.save(SITE / "world_monitor.xlsx")
     except ImportError:
         print("(openpyxl absent : export XLSX sauté)")
@@ -123,15 +126,28 @@ def main():
     sys.path.insert(0, str(HERE))
     import classify
     alias = classify.load_alias(HERE / "medias_alias.csv")
+    bans = classify.load_bans(HERE / "medias_bannis.txt")
+    import traduction
+    med_langues = traduction.load_medias_langues()
     medias = {}
     with open(HERE / "medias.csv", encoding="utf-8") as f:
         for m in csv.DictReader(f, delimiter=";"):
             medias[m["media"].strip().lower()] = m
-    propres, n_lang, n_dates, n_fusion = [], 0, 0, 0
+    propres, n_ban, n_trad, n_dates, n_fusion = [], 0, 0, 0, 0
     for r in rows:
-        if not classify.est_anglais(r["titre"]):
-            n_lang += 1
+        if classify.est_banni(r["nom_du_media"], bans):
+            n_ban += 1
             continue
+        # traduction rétroactive des titres non anglais encore en VO
+        if not r.get("langue"):
+            t, vo, lang = traduction.ensure_english(
+                r["titre"], r["nom_du_media"], med_langues)
+            r["langue"] = lang
+            if vo:
+                n_trad += 1
+                r["titre"], r["titre_vo"] = t, vo
+            else:
+                r.setdefault("titre_vo", "")
         d2 = classify.norm_date(r["time_stamp"])
         if d2 != r["time_stamp"]:
             n_dates += 1
@@ -156,9 +172,10 @@ def main():
                 r["intérêt marine calcul"] = round(nv * 0.4 / 40, 4)
                 r["intérêt_par_fiabilité"] = round(0.6 / fi + nv * 0.4 / 40, 4)
         propres.append(r)
-    if n_lang or n_dates or n_fusion:
-        print(f"migration : {n_lang} non anglais retirés, {n_dates} dates "
-              f"normalisées, {n_fusion} articles rattachés à leur média canonique")
+    if n_ban or n_trad or n_dates or n_fusion:
+        print(f"migration : {n_trad} titres traduits en anglais, {n_ban} doublons"
+              f" retirés, {n_dates} dates normalisées, {n_fusion} articles"
+              f" rattachés à leur média canonique")
         rows = propres
         write_master(rows)
     rows = propres
