@@ -117,8 +117,52 @@ def main():
     args = ap.parse_args()
 
     rows = read_csv(MASTER) if MASTER.exists() else []
-    liens = {r["lien"] for r in rows}
     print(f"historique : {len(rows)} articles")
+
+    # ---- migration rétroactive (idempotente, à chaque passage) ----
+    sys.path.insert(0, str(HERE))
+    import classify
+    alias = classify.load_alias(HERE / "medias_alias.csv")
+    medias = {}
+    with open(HERE / "medias.csv", encoding="utf-8") as f:
+        for m in csv.DictReader(f, delimiter=";"):
+            medias[m["media"].strip().lower()] = m
+    propres, n_lang, n_dates, n_fusion = [], 0, 0, 0
+    for r in rows:
+        if not classify.est_anglais(r["titre"]):
+            n_lang += 1
+            continue
+        d2 = classify.norm_date(r["time_stamp"])
+        if d2 != r["time_stamp"]:
+            n_dates += 1
+            r["time_stamp"] = d2
+        can = classify.canonical_media(r["nom_du_media"], alias)
+        if can != r["nom_du_media"]:
+            n_fusion += 1
+            r["nom_du_media"] = can
+            m = medias.get(can.lower())
+            if m:  # hérite de la fiche du média canonique + recalcul fiabilité
+                r["country_headquarters"] = m["pays_siege"] or r["country_headquarters"]
+                r["sujet_media"] = m["theme_media"] or r["sujet_media"]
+                r["official_rating"] = m["note"] or r["official_rating"]
+                try:
+                    fi = int(m["indice_fiabilite"] or 5)
+                except ValueError:
+                    fi = 5
+                nv = num(r["indice_interet_naval"]) or 0
+                r["indice_fiabilite"] = fi
+                r["fiabilité_calcul"] = round(40 / fi, 4)
+                r["fiabilité2"] = round(0.6 / fi, 4)
+                r["intérêt marine calcul"] = round(nv * 0.4 / 40, 4)
+                r["intérêt_par_fiabilité"] = round(0.6 / fi + nv * 0.4 / 40, 4)
+        propres.append(r)
+    if n_lang or n_dates or n_fusion:
+        print(f"migration : {n_lang} non anglais retirés, {n_dates} dates "
+              f"normalisées, {n_fusion} articles rattachés à leur média canonique")
+        rows = propres
+        write_master(rows)
+    rows = propres
+    liens = {r["lien"] for r in rows}
 
     ajout = 0
     if not args.no_logs and Path(args.logs).exists():

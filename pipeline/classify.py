@@ -178,6 +178,110 @@ def score_naval(title, naval_pats, cap=40):
     t = norm(title)
     return min(cap, sum(w for p, w in naval_pats if p.search(t)))
 
+# ------------------------------------------------------- langue / dates / alias
+# scripts non latins : cyrillique, arabe, hébreu, CJK, coréen, thaï, devanagari…
+_NON_LATIN = re.compile(r"[Ѐ-ӿ԰-֏֐-׿؀-ۿ"
+                        r"ऀ-෿฀-๿ሀ-፿぀-ヿ"
+                        r"一-鿿가-힯]")
+_VIET = re.compile(r"[ăđơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]", re.I)
+_STOPS = {
+    "en": {"the", "of", "to", "and", "in", "for", "on", "with", "as", "at", "by",
+           "from", "is", "are", "was", "will", "after", "over", "new", "says",
+           "his", "her", "its", "their", "has", "have", "be", "not", "no", "how",
+           "what", "who", "more", "about", "into", "amid", "up", "out", "than"},
+    "fr": {"le", "la", "les", "des", "une", "du", "au", "aux", "avec", "pour",
+           "dans", "est", "sont", "sur", "pas", "par", "qui", "que", "plus", "ce"},
+    "es": {"el", "los", "las", "una", "del", "por", "para", "con", "más", "este",
+           "esta", "como", "pero", "sus", "según", "tras", "entre"},
+    "de": {"der", "die", "das", "und", "ist", "nicht", "mit", "für", "von", "dem",
+           "den", "ein", "eine", "auf", "wird", "nach", "über", "beim", "gegen"},
+    "it": {"il", "lo", "gli", "della", "delle", "di", "che", "con", "per", "una",
+           "sono", "più", "anche", "dopo", "nel", "alla"},
+    "pt": {"os", "uma", "das", "dos", "não", "com", "por", "para", "mais", "como",
+           "foi", "são", "após", "sobre"},
+    "nl": {"het", "een", "van", "voor", "met", "naar", "wordt", "niet", "aan",
+           "bij", "over", "deze"},
+    "id": {"yang", "dan", "di", "untuk", "dari", "dengan", "akan", "pada", "ini",
+           "itu", "tidak"},
+    "tr": {"ve", "bir", "için", "ile", "bu", "da", "de", "olarak", "sonra",
+           "yeni", "daha"},
+}
+
+def est_anglais(titre):
+    """True si le titre semble anglais. Heuristique : scripts non latins,
+    diacritiques vietnamiens, puis duel de mots-outils anglais vs autres."""
+    t = str(titre)
+    if _NON_LATIN.search(t):
+        return False
+    if len(_VIET.findall(t)) >= 2:
+        return False
+    toks = re.findall(r"[a-zà-ÿ']+", t.lower())
+    en = sum(1 for w in toks if w in _STOPS["en"])
+    autres = max((sum(1 for w in toks if w in s)
+                  for l, s in _STOPS.items() if l != "en"), default=0)
+    if autres >= 2 and autres > en:
+        return False
+    # beaucoup d'accents et aucun mot-outil anglais → probablement pas anglais
+    if en == 0 and len(re.findall(r"[à-ÿ]", t.lower())) >= 3:
+        return False
+    return True
+
+_DATE_FORMATS = ["%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d",
+                 "%Y/%m/%d %H:%M", "%d/%m/%Y %H:%M", "%d/%m/%Y",
+                 "%d-%m-%Y %H:%M", "%d %b %Y %H:%M", "%d %b %Y",
+                 "%b %d, %Y %H:%M", "%b %d, %Y", "%B %d, %Y"]
+
+def norm_date(d):
+    """Normalise toute date en 'YYYY-MM-DD HH:MM' ('' si indéchiffrable)."""
+    import datetime, email.utils
+    d = str(d or "").strip()
+    if not d:
+        return ""
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}", d):
+        return d
+    try:  # RFC 2822 : 'Wed, 08 Jul 2026 10:30:00 GMT'
+        return email.utils.parsedate_to_datetime(d).strftime("%Y-%m-%d %H:%M")
+    except Exception:
+        pass
+    try:  # ISO : '2026-07-08T10:30:00Z'
+        return datetime.datetime.fromisoformat(
+            d.replace("Z", "+00:00")).strftime("%Y-%m-%d %H:%M")
+    except Exception:
+        pass
+    for fmt in _DATE_FORMATS:
+        try:
+            return datetime.datetime.strptime(d, fmt).strftime("%Y-%m-%d %H:%M")
+        except ValueError:
+            continue
+    return ""
+
+def load_alias(path):
+    """medias_alias.csv → (exacts{alias:canon}, préfixes[(préfixe,canon)])."""
+    exact, globs = {}, []
+    if Path(path).exists():
+        for line in Path(path).read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or ";" not in line \
+               or line.startswith("alias;"):
+                continue
+            a, c = [x.strip() for x in line.split(";", 1)]
+            if a.endswith("*"):
+                globs.append((a[:-1].rstrip(), c))
+            else:
+                exact[a] = c
+    globs.sort(key=lambda x: -len(x[0]))
+    return exact, globs
+
+def canonical_media(name, alias):
+    exact, globs = alias
+    n = str(name).strip()
+    if n in exact:
+        return exact[n]
+    for pref, canon in globs:
+        if n.startswith(pref + " ") or n == pref:
+            return canon
+    return n
+
 # repli : si le titre ne permet pas de classer, le thème du média décide
 THEME_FALLBACK = {
     "Tech": "Tech",
@@ -199,6 +303,7 @@ def main():
     pays = compile_dict(pays_raw)
     rules = load_rules(HERE / "regles.txt", pays_raw)
     naval = load_naval(HERE / "naval.txt")
+    alias = load_alias(HERE / "medias_alias.csv")
     regions = json.loads((HERE / "regions.json").read_text(encoding="utf-8"))
     medias = {}
     with open(HERE / "medias.csv", encoding="utf-8") as f:
@@ -217,10 +322,14 @@ def main():
                     "indice_interet_naval", "fiabilité2",
                     "intérêt marine calcul", "intérêt_par_fiabilité",
                     "confiance_pays_article"])
+        n_lang = 0
         for row in r:
             n_in += 1
             titre = row.get("titre", "")
-            media = row.get("media", "").strip()
+            if not est_anglais(titre):
+                n_lang += 1
+                continue
+            media = canonical_media(row.get("media", ""), alias)
             m = medias.get(media.lower(), {})
             gov = ".gov" in media.lower()
             minfo = (m.get("pays_siege", ""),
@@ -242,13 +351,14 @@ def main():
             fia2 = round(0.6 / fia, 4)
             marine = round(nav * 0.4 / 40, 4)
             composite = round(fia2 + marine, 4)
-            w.writerow([media, titre, row.get("lien", ""), row.get("date", ""),
+            w.writerow([media, titre, row.get("lien", ""),
+                        norm_date(row.get("date", "")),
                         m.get("pays_siege", "Undetermined"), ca, rg, th,
                         m.get("theme_media", ""), m.get("note", ""),
                         fia, fia_calc, nav, fia2, marine, composite, conf])
 
-    print(f"{n_in} articles | thème déterminé : {n_theme} ({n_theme/max(n_in,1):.0%})"
-          f" | pays déterminé : {n_pays} ({n_pays/max(n_in,1):.0%})")
+    print(f"{n_in} articles | {n_lang} non anglais écartés"
+          f" | thème déterminé : {n_theme} | pays déterminé : {n_pays}")
     print(f"→ {args.out}")
 
 if __name__ == "__main__":
