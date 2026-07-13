@@ -87,9 +87,9 @@ button.go:hover{background:#1c8a5c;border-color:#1c8a5c}
   <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
     <span id="lastupdate" style="color:var(--muted);font-size:.78rem"></span>
     <button class="primary" id="refreshbtn" onclick="refreshData()" title="Recharger les dernières données collectées">🔄 Actualiser</button>
-    <button onclick="dlCSV()" title="Télécharger le jeu de données au format CSV">⬇ CSV</button>
-    <button onclick="dlXLSX()" title="Télécharger le jeu de données au format Excel">⬇ XLSX</button>
-    <button onclick="dlDB()" title="Télécharger le jeu de données au format SQLite">⬇ DB</button>
+    <button onclick="dlCSV()" title="Exporte la SÉLECTION courante : filtre par pays, région, média, dates ou recherche, puis clique. Sans filtre = tout le corpus.">⬇ CSV (sélection)</button>
+    <button onclick="dlXLSX()" title="Télécharger le corpus complet au format Excel">⬇ XLSX (tout)</button>
+    <button onclick="dlDB()" title="Télécharger le corpus complet au format SQLite">⬇ DB (tout)</button>
   </div>
 </header>
 
@@ -755,16 +755,19 @@ function openRegion(rg){
 }
 
 // ---------- téléchargements ----------
-const EXPORT_COLS=[['m','nom_du_media'],['t','titre'],['l','lien'],['d','time_stamp'],['ch','country_headquarters'],['ca','country_article'],['rg','region'],['sa','sujet_article'],['sm','sujet_media'],['or','official_rating'],['fi','indice_fiabilite'],['nv','indice_interet_naval'],['ip','interet_par_fiabilite'],['cf','confiance_pays_article']];
+const EXPORT_COLS=[['m','nom_du_media'],['t','titre'],['l','lien'],['d','time_stamp'],['ch','country_headquarters'],['ca','country_article'],['rg','region'],['sa','sujet_article'],['sm','sujet_media'],['or','official_rating'],['no','notation'],['fi','indice_fiabilite'],['nv','indice_interet_naval'],['ip','interet_par_fiabilite'],['cf','confiance_pays_article'],['lg','langue'],['tv','titre_vo']];
 function dlBlob(name, blob){
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob); a.download=name;
   document.body.appendChild(a); a.click(); a.remove();
 }
 function dlCSV(){
+  const rows = filtered();          // = sélection courante (filtres + recherche + dates)
   const q=v=>{v=(v==null?'':String(v)); return /[";\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v;};
-  const lines=[EXPORT_COLS.map(c=>c[1]).join(';')].concat(DATA.map(r=>EXPORT_COLS.map(([k])=>q(r[k])).join(';')));
-  dlBlob('world_monitor.csv', new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
+  const lines=[EXPORT_COLS.map(c=>c[1]).join(';')].concat(rows.map(r=>EXPORT_COLS.map(([k])=>q(r[k])).join(';')));
+  const tout = rows.length === DATA.length;
+  dlBlob(tout ? 'world_monitor.csv' : 'world_monitor_selection_'+rows.length+'_articles.csv',
+         new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
 }
 function dlB64(name,b64,mime){
   const bin=atob(b64); const u=new Uint8Array(bin.length);
