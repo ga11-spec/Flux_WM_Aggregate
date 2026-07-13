@@ -139,7 +139,7 @@ def main():
     with open(HERE / "medias.csv", encoding="utf-8") as f:
         for m in csv.DictReader(f, delimiter=";"):
             medias[m["media"].strip().lower()] = m
-    propres, n_ban, n_trad, n_dates, n_fusion, n_fiab = [], 0, 0, 0, 0, 0
+    propres, n_ban, n_trad, n_dates, n_fusion, n_fiab, n_fiche = [], 0, 0, 0, 0, 0, 0
     for r in rows:
         if classify.est_banni(r["nom_du_media"], bans):
             n_ban += 1
@@ -169,8 +169,17 @@ def main():
                 r["country_headquarters"] = m["pays_siege"] or r["country_headquarters"]
                 r["sujet_media"] = m["theme_media"] or r["sujet_media"]
                 r["official_rating"] = m["note"] or r["official_rating"]
-        # note du média : source de vérité = medias.csv ; inconnu → F et 4,5
+        # fiche média : source de vérité = medias.csv ; inconnu → F et 4,5
         fm = medias.get(r["nom_du_media"].strip().lower())
+        if fm:  # complète siège / thème / note officielle manquants
+            if fm.get("pays_siege") and (r.get("country_headquarters") or "") \
+               in ("", "Undetermined", "None"):
+                r["country_headquarters"] = fm["pays_siege"]
+                n_fiche += 1
+            if fm.get("theme_media") and not (r.get("sujet_media") or "").strip():
+                r["sujet_media"] = fm["theme_media"]
+            if fm.get("note") and not (r.get("official_rating") or "").strip():
+                r["official_rating"] = fm["note"]
         no = ((fm.get("notation") if fm else "") or "F").strip().upper()
         try:
             fi_new = float((fm.get("indice_fiabilite") if fm else "") or 4.5)
@@ -187,10 +196,10 @@ def main():
             r["intérêt marine calcul"] = round(nv * 0.4 / 40, 4)
             r["intérêt_par_fiabilité"] = round(0.6 / fi_new + nv * 0.4 / 40, 4)
         propres.append(r)
-    if n_ban or n_trad or n_dates or n_fusion or n_fiab:
+    if n_ban or n_trad or n_dates or n_fusion or n_fiab or n_fiche:
         print(f"migration : {n_trad} titres traduits, {n_ban} doublons retirés,"
               f" {n_dates} dates normalisées, {n_fusion} fusions de médias,"
-              f" {n_fiab} notes/fiabilités mises à jour")
+              f" {n_fiab} notes/fiabilités mises à jour, {n_fiche} sièges complétés")
         rows = propres
         write_master(rows)
     rows = propres
