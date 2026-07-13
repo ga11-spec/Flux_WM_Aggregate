@@ -115,7 +115,7 @@ button.go:hover{background:#1c8a5c;border-color:#1c8a5c}
       <span style="display:inline-block;width:26px;height:12px;border-radius:3px;background:rgba(70,132,220,.14);vertical-align:middle"></span> 1-10
       <span style="display:inline-block;width:26px;height:12px;border-radius:3px;background:rgba(70,132,220,.32);vertical-align:middle"></span> 11-20
       <span style="display:inline-block;width:26px;height:12px;border-radius:3px;background:rgba(70,132,220,.50);vertical-align:middle"></span> 21-30
-      <span style="display:inline-block;width:26px;height:12px;border-radius:3px;background:rgba(70,132,220,.70);vertical-align:middle"></span> 31-40
+      <span style="display:inline-block;width:26px;height:12px;border-radius:3px;background:rgba(70,132,220,.70);vertical-align:middle"></span> 31+
       · trier via l'en-tête ⚓
     </div>
   </div>
@@ -137,7 +137,7 @@ button.go:hover{background:#1c8a5c;border-color:#1c8a5c}
       <option value="count">Nombre d'articles</option>
       <option value="medias">Nombre de médias distincts (sources)</option>
       <option value="rating">Note officielle moyenne</option>
-      <option value="naval">Intérêt naval moyen (/40)</option>
+      <option value="naval">Intérêt naval moyen</option>
       <option value="navcount">Nb d'articles à signal naval (&gt;0)</option>
       <option value="fia">Indice de fiabilité moyen (1=meilleur)</option>
     </select></div>
@@ -186,7 +186,8 @@ const FIELDS = {
   sm:{label:"Thème du média", filter:true},
   m:{label:"Média", filter:false},
   or:{label:"Note officielle", filter:true},
-  fi:{label:"Indice de fiabilité", filter:true},
+  no:{label:"Note du média", filter:true},
+  fi:{label:"Indice de fiabilité", filter:false},
   cf:{label:"Confiance pays", filter:false},
   lg:{label:"Langue source", filter:true},
   an:{label:"Année", filter:true},
@@ -205,6 +206,7 @@ function prepare(arr){ arr.forEach(r => {
   r.mois = r.d ? r.d.slice(0,7) : '';
   r.an = r.d ? r.d.slice(0,4) : '';
   r.lg = r.lg || 'en';
+  r.no = r.no || 'F';
   r._s = (r.t+' '+(r.tv||'')+' '+r.m+' '+r.ca+' '+r.ch+' '+r.rg+' '+r.sa+' '+r.sm).toLowerCase();
 }); }
 
@@ -295,7 +297,7 @@ function filtered(){
 }
 
 // ---------- tableau ----------
-const COLS = [['d','Date'],['m','Média'],['t','Titre'],['ca','Pays traité'],['rg','Région'],['sa','Thème'],['fi','Fiab.'],['nv','⚓ Naval']];
+const COLS = [['d','Date'],['m','Média'],['t','Titre'],['ca','Pays traité'],['rg','Région'],['sa','Thème'],['no','Note'],['nv','⚓ Naval']];
 document.getElementById('thead').innerHTML = COLS.map(([k,l])=>`<th onclick="setSort('${k}')">${l} ⇅</th>`).join('');
 function setSort(k){ if(sortKey===k) sortDir*=-1; else {sortKey=k; sortDir=1;} renderTable(); }
 
@@ -317,7 +319,7 @@ function renderTable(){
       <td><span class="badge clickbadge" data-c="${esc(disp(r.ca))}" onclick="openCountry(this.dataset.c)" title="Fiche pays">${esc(disp(r.ca))}</span></td>
       <td><span class="clickbadge" data-r="${esc(disp(r.rg))}" onclick="openRegion(this.dataset.r)" title="Fiche région">${esc(disp(r.rg))}</span></td>
       <td><span class="badge clickbadge" data-t="${esc(disp(r.sa))}" onclick="openTheme(this.dataset.t)" title="Fiche thème">${esc(disp(r.sa))}</span></td>
-      <td>${r.fi ?? '—'}</td>
+      <td><b title="indice ${r.fi ?? '—'}">${esc(r.no||'F')}</b></td>
       <td>${r.nv>0 ? '<span class="badge">⚓ '+r.nv+'</span>' : '—'}</td>
     </tr>`).join('');
 }
@@ -595,7 +597,7 @@ function openSource(m){
       <span class="badge clickbadge" data-c="${esc(disp(o.ch))}" onclick="openCountry(this.dataset.c)">🏛 Siège : ${esc(disp(o.ch))}</span>
       <span class="badge">🏷 Thème du média : ${esc(disp(o.sm))}</span>
       <span class="badge">📰 ${arts.length} article(s)</span>
-      ${o.fi!=null?`<span class="badge">🛡 Fiabilité : ${o.fi}/5 (1=meilleure)</span>`:''}
+      <span class="badge">🛡 Note : <b>${esc(o.no||'F')}</b>${o.fi!=null?` (indice ${o.fi})`:''}</span>
       ${rated?`<span class="badge">⭐ Note officielle : ${rated.or}</span>`:''}
     </p>
     <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin:0 0 16px">
