@@ -139,7 +139,8 @@ def main():
     with open(HERE / "medias.csv", encoding="utf-8") as f:
         for m in csv.DictReader(f, delimiter=";"):
             medias[m["media"].strip().lower()] = m
-    propres, n_ban, n_trad, n_dates, n_fusion, n_fiab, n_fiche = [], 0, 0, 0, 0, 0, 0
+    naval_pats = classify.load_naval(HERE / "naval.txt")
+    propres, n_ban, n_trad, n_dates, n_fusion, n_fiab, n_fiche, n_naval = [], 0, 0, 0, 0, 0, 0, 0
     for r in rows:
         if classify.est_banni(r["nom_du_media"], bans):
             n_ban += 1
@@ -187,19 +188,25 @@ def main():
             fi_new = 4.5
         fi_new = int(fi_new) if fi_new == int(fi_new) else fi_new
         r["notation"] = no
-        if num(r.get("indice_fiabilite")) != fi_new:
+        # rescore naval (déplafonné) sur le titre — rétroactif
+        nv_new = classify.score_naval(r["titre"], naval_pats)
+        if num(r.get("indice_interet_naval")) != nv_new:
+            n_naval += 1
+            r["indice_interet_naval"] = nv_new
+        if num(r.get("indice_fiabilite")) != fi_new or \
+           num(r.get("intérêt marine calcul")) != round(nv_new * 0.4 / 40, 4):
             n_fiab += 1
-            nv = num(r["indice_interet_naval"]) or 0
             r["indice_fiabilite"] = fi_new
             r["fiabilité_calcul"] = round(40 / fi_new, 4)
             r["fiabilité2"] = round(0.6 / fi_new, 4)
-            r["intérêt marine calcul"] = round(nv * 0.4 / 40, 4)
-            r["intérêt_par_fiabilité"] = round(0.6 / fi_new + nv * 0.4 / 40, 4)
+            r["intérêt marine calcul"] = round(nv_new * 0.4 / 40, 4)
+            r["intérêt_par_fiabilité"] = round(0.6 / fi_new + nv_new * 0.4 / 40, 4)
         propres.append(r)
-    if n_ban or n_trad or n_dates or n_fusion or n_fiab or n_fiche:
+    if n_ban or n_trad or n_dates or n_fusion or n_fiab or n_fiche or n_naval:
         print(f"migration : {n_trad} titres traduits, {n_ban} doublons retirés,"
               f" {n_dates} dates normalisées, {n_fusion} fusions de médias,"
-              f" {n_fiab} notes/fiabilités mises à jour, {n_fiche} sièges complétés")
+              f" {n_fiab} notes/fiabilités mises à jour, {n_fiche} sièges complétés,"
+              f" {n_naval} scores navals recalculés (déplafonnés)")
         rows = propres
         write_master(rows)
     rows = propres

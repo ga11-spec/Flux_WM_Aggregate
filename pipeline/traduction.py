@@ -111,19 +111,27 @@ def detect_lang(titre, media="", medias_langues=None):
 
 # ---------------------------------------------------------------- traduction
 _ARGOS_OK = None
+_ARGOS_ERR = ""
 _INSTALLED = set()
+_ECHECS = set()
 
 
 def _argos():
     """Charge argostranslate si présent (sinon mode dégradé sans traduction)."""
-    global _ARGOS_OK
+    global _ARGOS_OK, _ARGOS_ERR
     if _ARGOS_OK is None:
         try:
             import argostranslate.package, argostranslate.translate  # noqa
             _ARGOS_OK = True
-        except Exception:
+        except Exception as e:
             _ARGOS_OK = False
+            _ARGOS_ERR = f"{type(e).__name__}: {e}"
+            print(f"⚠ TRADUCTION INDISPONIBLE — {_ARGOS_ERR}")
     return _ARGOS_OK
+
+
+def moteur_statut():
+    return "Argos opérationnel" if _argos() else f"ARGOS INDISPONIBLE ({_ARGOS_ERR})"
 
 
 def _ensure_model(code):
@@ -135,15 +143,20 @@ def _ensure_model(code):
     if (code, "en") in installed:
         _INSTALLED.add(code)
         return True
+    if code in _ECHECS:
+        return False
     try:
         pkg.update_package_index()
         for p in pkg.get_available_packages():
             if p.from_code == code and p.to_code == "en":
+                print(f"  téléchargement du modèle {code}→en…")
                 pkg.install_from_path(p.download())
                 _INSTALLED.add(code)
                 return True
-    except Exception:
-        pass
+        print(f"  ⚠ aucun modèle {code}→en dans l'index Argos")
+    except Exception as e:
+        print(f"  ⚠ échec modèle {code}→en : {type(e).__name__}: {e}")
+    _ECHECS.add(code)
     return False
 
 
