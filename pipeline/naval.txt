@@ -1,6 +1,6 @@
-# Barème d'intérêt naval — score sur 40 (plafonné).
+# Barème d'intérêt naval — somme des poids, SANS plafond.
 # Format : poids: mot1, mot2, …  (multi-mots autorisés, insensible à la casse)
-# Le score d'un titre = somme des poids des mots trouvés, plafonnée à 40.
+# Le score d'un titre = somme des poids de tous les mots trouvés (pas de maximum).
 
 # Très forts — signal naval quasi certain
 20: navy, aircraft carrier, submarine, submarines, warship, warships, destroyer, destroyers, frigate, frigates, naval fleet, naval blockade, naval base, naval exercise, aukus, amphibious assault

@@ -173,10 +173,12 @@ def load_naval(path):
                 pats.append((re.compile(_kw_regex(kw)), w))
     return pats
 
-def score_naval(title, naval_pats, cap=40):
-    """Somme des poids des mots trouvés, plafonnée (défaut 40)."""
+def score_naval(title, naval_pats, cap=None):
+    """Somme des poids des mots trouvés. Sans plafond par défaut
+    (passer cap=40 pour retrouver l'ancien comportement)."""
     t = norm(title)
-    return min(cap, sum(w for p, w in naval_pats if p.search(t)))
+    s = sum(w for p, w in naval_pats if p.search(t))
+    return s if cap is None else min(cap, s)
 
 # ------------------------------------------------------- langue / dates / alias
 # scripts non latins : grec, cyrillique, arabe, hébreu, CJK, coréen, thaï, devanagari…
@@ -361,7 +363,7 @@ def main():
         w.writerow(["nom_du_media", "titre", "lien", "time_stamp",
                     "country_headquarters", "country_article", "region",
                     "sujet_article", "sujet_media", "official_rating",
-                    "indice_fiabilite", "fiabilité_calcul",
+                    "indice_fiabilite", "notation", "fiabilité_calcul",
                     "indice_interet_naval", "fiabilité2",
                     "intérêt marine calcul", "intérêt_par_fiabilité",
                     "confiance_pays_article", "langue", "titre_vo"])
@@ -387,11 +389,13 @@ def main():
             rg = regions.get(ca, "Undetermined")
             if th != "Non déterminé": n_theme += 1
             if ca != "Undetermined": n_pays += 1
-            # indices fiabilité / naval
+            # indices fiabilité / naval — source inconnue = F et 4,5 par défaut
+            notation = (m.get("notation") or "F").strip().upper()
             try:
-                fia = int(m.get("indice_fiabilite") or 5)
+                fia = float(m.get("indice_fiabilite") or 4.5)
             except ValueError:
-                fia = 5
+                fia = 4.5
+            fia = int(fia) if fia == int(fia) else fia
             nav = score_naval(titre, naval)
             fia_calc = round(40 / fia, 4)
             fia2 = round(0.6 / fia, 4)
@@ -401,8 +405,8 @@ def main():
                         norm_date(row.get("date", "")),
                         m.get("pays_siege", "Undetermined"), ca, rg, th,
                         m.get("theme_media", ""), m.get("note", ""),
-                        fia, fia_calc, nav, fia2, marine, composite, conf,
-                        lang, titre_vo])
+                        fia, notation, fia_calc, nav, fia2, marine, composite,
+                        conf, lang, titre_vo])
 
     print(f"{n_in} articles | {n_trad} traduits en anglais | {n_ban} doublons"
           f" écartés | thème déterminé : {n_theme} | pays déterminé : {n_pays}")

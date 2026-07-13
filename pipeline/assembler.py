@@ -20,7 +20,7 @@ SITE = HERE.parent / "docs"   # dossier servi par GitHub Pages
 
 COLS = ["nom_du_media", "titre", "lien", "time_stamp", "country_headquarters",
         "country_article", "region", "sujet_article", "sujet_media",
-        "official_rating", "indice_fiabilite", "fiabilité_calcul",
+        "official_rating", "indice_fiabilite", "notation", "fiabilité_calcul",
         "indice_interet_naval", "fiabilité2", "intérêt marine calcul",
         "intérêt_par_fiabilité", "confiance_pays_article", "langue", "titre_vo"]
 
@@ -68,7 +68,8 @@ def build_site(rows, added=0):
                      "ip": num(r["intérêt_par_fiabilité"]),
                      "cf": r["confiance_pays_article"],
                      "lg": r.get("langue") or "en",
-                     "tv": r.get("titre_vo") or ""})
+                     "tv": r.get("titre_vo") or "",
+                     "no": r.get("notation") or "F"})
     js = "window.DATA_WM=" + json.dumps(
         recs, ensure_ascii=False, separators=(",", ":")).replace(
         "</script", "<\\/script") + ";"
@@ -129,11 +130,16 @@ def main():
     bans = classify.load_bans(HERE / "medias_bannis.txt")
     import traduction
     med_langues = traduction.load_medias_langues()
+    print("moteur de traduction :", traduction.moteur_statut())
+    a_traduire = sum(1 for r in rows
+                     if (r.get("langue") or "") not in ("", "en")
+                     and not (r.get("titre_vo") or "").strip())
+    print(f"titres non anglais en attente de traduction : {a_traduire}")
     medias = {}
     with open(HERE / "medias.csv", encoding="utf-8") as f:
         for m in csv.DictReader(f, delimiter=";"):
             medias[m["media"].strip().lower()] = m
-    propres, n_ban, n_trad, n_dates, n_fusion = [], 0, 0, 0, 0
+    propres, n_ban, n_trad, n_dates, n_fusion, n_fiab = [], 0, 0, 0, 0, 0
     for r in rows:
         if classify.est_banni(r["nom_du_media"], bans):
             n_ban += 1
@@ -159,25 +165,32 @@ def main():
             n_fusion += 1
             r["nom_du_media"] = can
             m = medias.get(can.lower())
-            if m:  # hérite de la fiche du média canonique + recalcul fiabilité
+            if m:  # hérite de la fiche du média canonique
                 r["country_headquarters"] = m["pays_siege"] or r["country_headquarters"]
                 r["sujet_media"] = m["theme_media"] or r["sujet_media"]
                 r["official_rating"] = m["note"] or r["official_rating"]
-                try:
-                    fi = int(m["indice_fiabilite"] or 5)
-                except ValueError:
-                    fi = 5
-                nv = num(r["indice_interet_naval"]) or 0
-                r["indice_fiabilite"] = fi
-                r["fiabilité_calcul"] = round(40 / fi, 4)
-                r["fiabilité2"] = round(0.6 / fi, 4)
-                r["intérêt marine calcul"] = round(nv * 0.4 / 40, 4)
-                r["intérêt_par_fiabilité"] = round(0.6 / fi + nv * 0.4 / 40, 4)
+        # note du média : source de vérité = medias.csv ; inconnu → F et 4,5
+        fm = medias.get(r["nom_du_media"].strip().lower())
+        no = ((fm.get("notation") if fm else "") or "F").strip().upper()
+        try:
+            fi_new = float((fm.get("indice_fiabilite") if fm else "") or 4.5)
+        except ValueError:
+            fi_new = 4.5
+        fi_new = int(fi_new) if fi_new == int(fi_new) else fi_new
+        r["notation"] = no
+        if num(r.get("indice_fiabilite")) != fi_new:
+            n_fiab += 1
+            nv = num(r["indice_interet_naval"]) or 0
+            r["indice_fiabilite"] = fi_new
+            r["fiabilité_calcul"] = round(40 / fi_new, 4)
+            r["fiabilité2"] = round(0.6 / fi_new, 4)
+            r["intérêt marine calcul"] = round(nv * 0.4 / 40, 4)
+            r["intérêt_par_fiabilité"] = round(0.6 / fi_new + nv * 0.4 / 40, 4)
         propres.append(r)
-    if n_ban or n_trad or n_dates or n_fusion:
-        print(f"migration : {n_trad} titres traduits en anglais, {n_ban} doublons"
-              f" retirés, {n_dates} dates normalisées, {n_fusion} articles"
-              f" rattachés à leur média canonique")
+    if n_ban or n_trad or n_dates or n_fusion or n_fiab:
+        print(f"migration : {n_trad} titres traduits, {n_ban} doublons retirés,"
+              f" {n_dates} dates normalisées, {n_fusion} fusions de médias,"
+              f" {n_fiab} notes/fiabilités mises à jour")
         rows = propres
         write_master(rows)
     rows = propres
