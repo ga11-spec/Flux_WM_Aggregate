@@ -21,7 +21,7 @@ SITE = HERE.parent / "docs"   # dossier servi par GitHub Pages
 COLS = ["nom_du_media", "titre", "lien", "time_stamp", "country_headquarters",
         "country_article", "region", "sujet_article", "sujet_media",
         "official_rating", "indice_fiabilite", "notation", "fiabilité_calcul",
-        "indice_interet_naval", "fiabilité2", "intérêt marine calcul",
+        "indice_interet_naval", "region_maritime", "fiabilité2", "intérêt marine calcul",
         "intérêt_par_fiabilité", "confiance_pays_article", "langue", "titre_vo"]
 
 
@@ -67,6 +67,7 @@ def build_site(rows, added=0):
                      "nv": num(r["indice_interet_naval"]) or 0,
                      "ip": num(r["intérêt_par_fiabilité"]),
                      "cf": r["confiance_pays_article"],
+                     "rm": r.get("region_maritime") or "",
                      "lg": r.get("langue") or "en",
                      "tv": r.get("titre_vo") or "",
                      "no": r.get("notation") or "F"})
@@ -140,6 +141,7 @@ def main():
         for m in csv.DictReader(f, delimiter=";"):
             medias[m["media"].strip().lower()] = m
     naval_pats = classify.load_naval(HERE / "naval.txt")
+    zones = classify.load_zones(HERE / "regions_maritimes.txt")
     propres, n_ban, n_trad, n_dates, n_fusion, n_fiab, n_fiche, n_naval = [], 0, 0, 0, 0, 0, 0, 0
     for r in rows:
         if classify.est_banni(r["nom_du_media"], bans):
@@ -190,6 +192,7 @@ def main():
         r["notation"] = no
         # rescore naval (déplafonné) sur le titre — rétroactif
         nv_new = classify.score_naval(r["titre"], naval_pats)
+        r["region_maritime"] = classify.zone_maritime(r["titre"], zones)
         if num(r.get("indice_interet_naval")) != nv_new:
             n_naval += 1
             r["indice_interet_naval"] = nv_new

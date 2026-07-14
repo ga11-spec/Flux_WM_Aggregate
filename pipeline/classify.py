@@ -173,6 +173,33 @@ def load_naval(path):
                 pats.append((re.compile(_kw_regex(kw)), w))
     return pats
 
+def load_zones(path):
+    """regions_maritimes.txt → [(zone, [regex])] dans l'ordre du fichier."""
+    zones = []
+    if not Path(path).exists():
+        return zones
+    for line in Path(path).read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or ":" not in line:
+            continue
+        zone, kws = line.split(":", 1)
+        pats = [re.compile(_kw_regex(kw.strip().lower()))
+                for kw in kws.split(",") if kw.strip()]
+        if pats:
+            zones.append((zone.strip(), pats))
+    return zones
+
+def zone_maritime(title, zones):
+    """Zone maritime chaude du titre ('' si aucune). Plus de mots-clés gagne,
+    l'ordre du fichier départage."""
+    t = norm(title)
+    best, bs = "", 0
+    for zone, pats in zones:
+        s = sum(1 for p in pats if p.search(t))
+        if s > bs:
+            best, bs = zone, s
+    return best
+
 def score_naval(title, naval_pats, cap=None):
     """Somme des poids des mots trouvés. Sans plafond par défaut
     (passer cap=40 pour retrouver l'ancien comportement)."""
@@ -344,6 +371,7 @@ def main():
     pays = compile_dict(pays_raw)
     rules = load_rules(HERE / "regles.txt", pays_raw)
     naval = load_naval(HERE / "naval.txt")
+    zones = load_zones(HERE / "regions_maritimes.txt")
     alias = load_alias(HERE / "medias_alias.csv")
     bans = load_bans(HERE / "medias_bannis.txt")
     sys.path.insert(0, str(HERE))
@@ -364,7 +392,7 @@ def main():
                     "country_headquarters", "country_article", "region",
                     "sujet_article", "sujet_media", "official_rating",
                     "indice_fiabilite", "notation", "fiabilité_calcul",
-                    "indice_interet_naval", "fiabilité2",
+                    "indice_interet_naval", "region_maritime", "fiabilité2",
                     "intérêt marine calcul", "intérêt_par_fiabilité",
                     "confiance_pays_article", "langue", "titre_vo"])
         n_ban = n_trad = 0
@@ -397,6 +425,7 @@ def main():
                 fia = 4.5
             fia = int(fia) if fia == int(fia) else fia
             nav = score_naval(titre, naval)
+            zm = zone_maritime(titre, zones)
             fia_calc = round(40 / fia, 4)
             fia2 = round(0.6 / fia, 4)
             marine = round(nav * 0.4 / 40, 4)
@@ -405,8 +434,8 @@ def main():
                         norm_date(row.get("date", "")),
                         m.get("pays_siege", "Undetermined"), ca, rg, th,
                         m.get("theme_media", ""), m.get("note", ""),
-                        fia, notation, fia_calc, nav, fia2, marine, composite,
-                        conf, lang, titre_vo])
+                        fia, notation, fia_calc, nav, zm, fia2, marine,
+                        composite, conf, lang, titre_vo])
 
     print(f"{n_in} articles | {n_trad} traduits en anglais | {n_ban} doublons"
           f" écartés | thème déterminé : {n_theme} | pays déterminé : {n_pays}")
