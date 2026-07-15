@@ -5,27 +5,24 @@
    Une seule ligne à ajouter dans index.html, juste avant </body> :
         <script src="carto.js"></script>
 
-   Ce script REMPLIT l'onglet « 🗺️ Cartographie » (qui était vide) en
-   réutilisant tout ce qui existe déjà dans index.html :
-     - WORLD ............ géométrie SVG de chaque pays
-     - colorScale() ..... échelle de couleur bleue
-     - mapTip()/mapTipHide() ... infobulle au survol
-     - openCountry() .... fiche pays au clic
-     - filtered() ....... la sélection courante de l'onglet Explorer
-     - isJunk / NONPAYS / disp / esc ... utilitaires
-   Aucune dépendance externe. Rien d'autre à modifier.
+   Remplit l'onglet « 🗺️ Cartographie » en réutilisant tout ce qui existe
+   déjà dans index.html : WORLD, colorScale(), mapTip(), openCountry(),
+   filtered(), showOverlay(), artTable(), byDateDesc, isJunk, NONPAYS, esc,
+   starPath(). Aucune dépendance externe.
+
+   Nouveauté : couche « détroits stratégiques » (points dorés). Les articles
+   rattachés à un détroit sont détectés par mots-clés dans le titre (r._s).
    ========================================================================== */
 (function () {
   "use strict";
 
-  // Attend que index.html ait fini de définir ses fonctions et chargé les données.
   function ready(fn) {
     if (document.readyState === "loading")
       document.addEventListener("DOMContentLoaded", fn);
     else fn();
   }
 
-  // --- les mesures proposées (calculées par pays sur la sélection courante) ---
+  // --- mesures proposées (calculées par pays sur la sélection courante) ---
   var MEASURES = {
     count:    { label: "Nombre d'articles",              unit: "article(s)" },
     sources:  { label: "Nombre de sources distinctes",   unit: "source(s)"  },
@@ -33,7 +30,42 @@
     navcount: { label: "Articles à signal naval (⚓ > 0)", unit: "article(s) ⚓" }
   };
 
-  var state = { measure: "count", built: false };
+  /* --- détroits stratégiques -------------------------------------------------
+     Coordonnées (x,y) dans le repère du fond de carte (viewBox 0 25 1000 405),
+     obtenues par projection équirectangulaire calibrée sur les centroïdes des
+     pays de WORLD :  x = (lon + 180) * 2.77778 ;  y = 250 - 2.753 * lat.
+     kw = mots-clés (minuscules) cherchés dans le titre pour rattacher un article. */
+  var CHOKEPOINTS = [
+    { n: "Détroit d'Ormuz",         x: 656, y: 177, kw: ["hormuz", "ormuz"] },
+    { n: "Bab-el-Mandeb",           x: 620, y: 215, kw: ["bab-el-mandeb", "bab el-mandeb", "bab al-mandab", "mandeb", "mandab"] },
+    { n: "Canal de Suez",           x: 590, y: 167, kw: ["suez"] },
+    { n: "Détroit de Malacca",      x: 788, y: 246, kw: ["malacca", "melaka", "strait of singapore", "singapore strait"] },
+    { n: "Détroit de la Sonde",     x: 794, y: 267, kw: ["sunda strait", "sunda strait"] },
+    { n: "Détroit de Taïwan",       x: 832, y: 183, kw: ["taiwan strait"] },
+    { n: "Bosphore / Dardanelles",  x: 581, y: 137, kw: ["bosphorus", "bosporus", "dardanelles", "istanbul strait", "turkish strait"] },
+    { n: "Détroit de Gibraltar",    x: 484, y: 151, kw: ["gibraltar"] },
+    { n: "Pas de Calais / Manche",  x: 504, y: 110, kw: ["english channel", "strait of dover", "dover strait"] },
+    { n: "Détroits danois",         x: 535, y: 97,  kw: ["oresund", "kattegat", "skagerrak", "great belt", "danish strait"] },
+    { n: "Canal de Panamá",         x: 279, y: 225, kw: ["panama canal"] },
+    { n: "Cap de Bonne-Espérance",  x: 551, y: 345, kw: ["cape of good hope", "cape route"] },
+    { n: "Détroit de Magellan",     x: 306, y: 397, kw: ["strait of magellan", "magellan"] },
+    { n: "Détroit de Béring",       x: 31,  y: 69,  kw: ["bering strait", "bering"] }
+  ];
+
+  var state = { measure: "count", showChoke: true, built: false };
+
+  function fmt(v) {
+    return (v % 1) ? v.toFixed(2) : v.toLocaleString("fr-FR");
+  }
+
+  // articles de `rows` rattachés à un détroit (recherche des mots-clés dans r._s)
+  function matchChoke(rows, kw) {
+    return rows.filter(function (r) {
+      var s = r._s || "";
+      for (var i = 0; i < kw.length; i++) if (s.indexOf(kw[i]) !== -1) return true;
+      return false;
+    });
+  }
 
   // Agrège la sélection courante par pays traité (r.ca), hors valeurs non classées.
   function aggregate(rows, measure) {
@@ -58,9 +90,28 @@
     return out;
   }
 
-  // Rendu de la carte mondiale (choroplèthe) — reprend la logique de realSvgMap
-  // mais avec une infobulle adaptée à la mesure choisie et sans étoile de siège.
-  function mapSVG(counts, unit) {
+  // Marqueurs dorés des détroits (dessinés par-dessus les pays).
+  function chokeMarkers(rows) {
+    if (!state.showChoke) return "";
+    return CHOKEPOINTS.map(function (cp, i) {
+      var cnt = matchChoke(rows, cp.kw).length;
+      var tip = esc(cp.n + " — " + cnt + " article(s)");
+      var s = 6;
+      return (
+        '<g style="cursor:pointer" data-tip="' + tip + '" ' +
+        'onmousemove="mapTip(event,this.dataset.tip)" onmouseout="mapTipHide()" ' +
+        'onclick="mapTipHide();wmChokepoint(' + i + ')">' +
+          '<circle cx="' + cp.x + '" cy="' + cp.y + '" r="' + (s + 4) +
+          '" fill="rgba(246,193,60,.28)"/>' +
+          '<path d="' + starPath(cp.x, cp.y, s) +
+          '" fill="#f6c13c" stroke="#7a5c00" stroke-width=".7"/>' +
+        "</g>"
+      );
+    }).join("");
+  }
+
+  // Carte mondiale choroplèthe + couche détroits.
+  function mapSVG(counts, unit, rows) {
     var all = Object.keys(WORLD);
     var vals = all.map(function (n) { return counts[n] || 0; });
     var max = Math.max.apply(null, [1].concat(vals));
@@ -81,14 +132,10 @@
     }).join("");
     return '<div class="mapbox"><svg viewBox="0 25 1000 405" ' +
            'style="width:100%;height:560px" preserveAspectRatio="xMidYMid meet">' +
-           shapes + "</svg></div>";
+           shapes + chokeMarkers(rows) + "</svg></div>";
   }
 
-  function fmt(v) {
-    return (v % 1) ? v.toFixed(2) : v.toLocaleString("fr-FR");
-  }
-
-  // Légende dégradée min → max.
+  // Légende dégradée min → max (+ mention des détroits).
   function legend(max, unit) {
     var stops = [0, 0.25, 0.5, 0.75, 1]
       .map(function (t) {
@@ -101,12 +148,15 @@
         '<div style="display:flex;width:220px;border:1px solid var(--border);border-radius:4px;overflow:hidden">' +
           stops + "</div>" +
         '<span class="count">Élevé — jusqu\'à <b>' + fmt(max) + "</b> " + unit + "</span>" +
+        (state.showChoke
+          ? '<span class="count">★ <span style="color:#f6c13c">doré</span> = détroit stratégique (cliquer pour les articles)</span>'
+          : "") +
         '<span class="count" style="margin-left:auto">⬜ pays sans article dans la sélection</span>' +
       "</div>"
     );
   }
 
-  // Panneau latéral : classement des pays (cliquable), y compris ceux sans géométrie.
+  // Classement des pays (cliquable), y compris ceux sans géométrie.
   function ranking(counts, unit) {
     var entries = Object.keys(counts)
       .map(function (c) { return [c, counts[c]]; })
@@ -140,7 +190,27 @@
     );
   }
 
-  // Construit le squelette de l'onglet (une seule fois).
+  // Overlay des articles d'un détroit (déclenché par clic sur un point doré).
+  window.wmChokepoint = function (i) {
+    var cp = CHOKEPOINTS[i];
+    if (!cp || typeof filtered !== "function") return;
+    var arts = matchChoke(filtered(), cp.kw).sort(byDateDesc);
+    showOverlay(
+      '<h1 style="font-size:1.9rem;margin-bottom:10px">⭐ ' + esc(cp.n) + "</h1>" +
+      '<p style="margin-bottom:12px">' +
+        '<span class="badge">🌊 Détroit stratégique</span>' +
+        '<span class="badge">📰 ' + arts.length + " article(s) dans la sélection courante</span>" +
+      "</p>" +
+      '<p class="count" style="margin-bottom:12px">Articles dont le titre mentionne ce détroit (' +
+        cp.kw.slice(0, 3).map(function (k) { return "« " + esc(k) + " »"; }).join(", ") +
+        "…). Ajuste la recherche/les filtres de l'onglet Explorer pour élargir ou restreindre." +
+      "</p>" +
+      (arts.length ? artTable(arts)
+                   : '<p class="count">Aucun article ne mentionne ce détroit dans la sélection courante.</p>')
+    );
+  };
+
+  // Squelette de l'onglet (une seule fois).
   function build() {
     var host = document.getElementById("tab-carto");
     if (!host) return false;
@@ -154,10 +224,13 @@
       '<p class="count" style="margin-bottom:14px">Répartition géographique de la ' +
       'sélection courante (recherche + filtres de l\'onglet <b>Explorer</b>). ' +
       'Survole un pays pour le détail, clique pour ouvrir sa fiche.</p>' +
-      '<div class="chartctl" style="margin-bottom:6px">' +
+      '<div class="chartctl" style="margin-bottom:6px;align-items:flex-end">' +
         '<div><label style="display:block;font-size:.78rem;color:var(--muted);margin-bottom:5px">Mesure</label>' +
           '<select id="cartoMeasure">' + opts + "</select></div>" +
-        '<div style="align-self:flex-end"><span class="count" id="cartoScope"></span></div>' +
+        '<div><label style="display:flex;align-items:center;gap:6px;font-size:.85rem;color:var(--muted);cursor:pointer">' +
+          '<input type="checkbox" id="cartoChoke"' + (state.showChoke ? " checked" : "") +
+          '> Détroits stratégiques ★</label></div>' +
+        '<div><span class="count" id="cartoScope"></span></div>' +
       "</div>" +
       '<div id="cartoLegend"></div>' +
       '<div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">' +
@@ -166,6 +239,10 @@
       "</div>";
     document.getElementById("cartoMeasure").addEventListener("change", function () {
       state.measure = this.value;
+      render();
+    });
+    document.getElementById("cartoChoke").addEventListener("change", function () {
+      state.showChoke = this.checked;
       render();
     });
     state.built = true;
@@ -196,19 +273,15 @@
     document.getElementById("cartoScope").innerHTML =
       "sur <b>" + rows.length.toLocaleString("fr-FR") + "</b> article(s) sélectionné(s)";
     document.getElementById("cartoLegend").innerHTML = legend(max, m.unit);
-    document.getElementById("cartoMap").innerHTML = mapSVG(counts, m.unit);
+    document.getElementById("cartoMap").innerHTML = mapSVG(counts, m.unit, rows);
     document.getElementById("cartoRank").innerHTML = ranking(counts, m.unit);
   }
 
   ready(function () {
-    // 1) rendu quand on clique sur l'onglet Cartographie (après le handler d'origine)
     document.querySelectorAll(".tab").forEach(function (t) {
       if (t.dataset.tab === "carto")
         t.addEventListener("click", function () { setTimeout(render, 0); });
     });
-
-    // 2) garder la carte synchronisée avec les filtres de l'onglet Explorer :
-    //    on englobe renderAll() sans casser son comportement d'origine.
     if (typeof window.renderAll === "function") {
       var orig = window.renderAll;
       window.renderAll = function () {
@@ -216,8 +289,6 @@
         if (visible()) render();
       };
     }
-
-    // 3) si l'utilisateur arrive directement sur l'onglet déjà ouvert
     if (visible()) render();
   });
 })();
