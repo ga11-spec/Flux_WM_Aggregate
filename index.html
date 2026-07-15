@@ -317,6 +317,7 @@ function renderTable(){
       <td><span class="badge clickbadge" data-t="${esc(disp(r.sa))}" onclick="openTheme(this.dataset.t)" title="Fiche thème">${esc(disp(r.sa))}</span></td>
       <td>${r.fi ?? '—'}</td>
       <td>${r.nv>0 ? '<span class="badge">⚓ '+r.nv+'</span>' : '—'}</td>
+      <td>${(()=>{const s=+(((6-(r.fi==null?5:r.fi))*(r.nv||0))/100).toFixed(2);return s>0?'<span class="badge" style="color:#e8ecf4">🛡 '+s.toFixed(2)+'</span>':'<span style="color:var(--muted)">—</span>';})()}</td>
     </tr>`).join('');
 }
 
