@@ -1,26 +1,27 @@
 /* ============================================================================
    World Monitor — Onglet Graphe pondéré (graph.js)
    ---------------------------------------------------------------------------
-   Fichier autonome à déposer dans `docs/`, à côté de index.html + carto.js.
+   Fichier autonome à déposer dans `docs/`, à côté de index.html.
    Une seule ligne à ajouter dans index.html, juste avant </body> :
         <script src="graph.js"></script>
-   (peu importe l'ordre par rapport à carto.js)
 
-   Générateur de graphe : deux menus « Nœud de départ » / « Nœud d'arrivée »
-   (Média, Pays traité, Pays d'origine, Thème article, Thème média), dans le
-   sens qu'on veut. Un lien A→B = nombre d'articles reliant la valeur A (départ)
-   à la valeur B (arrivée) ; flèche orientée, épaisseur = poids.
+   Générateur : deux menus « Nœud de départ » / « Nœud d'arrivée » (Média,
+   Pays traité, Pays d'origine, Thème article, Thème média), dans le sens
+   voulu. Un lien A→B = nombre d'articles reliant A (départ) à B (arrivée),
+   flèche = sens, épaisseur = poids.
 
    Rendu : vis-network (physique ForceAtlas2Based, gravité à la Gephi), chargé
-   dynamiquement depuis un CDN au premier affichage. Clic sur un nœud → fiche
-   correspondante (openCountry / openSource / openTheme), réutilise l'existant.
+   depuis un CDN au premier affichage. Nouveautés :
+     • la disposition se FIGE automatiquement après stabilisation (plus de
+       mouvement continu) + bouton ❄ Figer / ▶ Animer ;
+     • au SURVOL d'un nœud, seuls ses liens et voisins restent visibles.
+   Clic sur un nœud → fiche correspondante (openCountry/openSource/openTheme).
    ========================================================================== */
 (function () {
   "use strict";
 
   var VIS_URL = "https://cdn.jsdelivr.net/npm/vis-network@9.1.9/standalone/umd/vis-network.min.js";
 
-  // dimensions sélectionnables : clé de champ -> libellé + type (pour le clic)
   var DIMS = {
     ch: { label: "Pays d'origine du média", kind: "country" },
     ca: { label: "Pays traité",             kind: "country" },
@@ -28,25 +29,19 @@
     sa: { label: "Thème de l'article",      kind: "theme"   },
     sm: { label: "Thème du média",          kind: "theme"   }
   };
-
-  var COLORS = {
-    source: "#4f8cff",   // apparaît seulement comme départ
-    target: "#37c99e",   // apparaît seulement comme arrivée
-    both:   "#9b7bf6"    // les deux
-  };
+  var COLORS = { source: "#4f8cff", target: "#37c99e", both: "#9b7bf6" };
 
   var state = {
-    src: "ch", tgt: "ca", topN: 30,
-    built: false, network: null, visLoading: null
+    src: "ch", tgt: "ca", topN: 30, built: false,
+    network: null, visLoading: null,
+    nodesDS: null, edgesDS: null, nodesRaw: [], edgesRaw: [], frozen: false
   };
 
   function ready(fn) {
-    if (document.readyState === "loading")
-      document.addEventListener("DOMContentLoaded", fn);
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fn);
     else fn();
   }
 
-  // charge vis-network une seule fois (promesse mémoïsée)
   function loadVis() {
     if (window.vis && window.vis.Network) return Promise.resolve();
     if (state.visLoading) return state.visLoading;
@@ -64,28 +59,22 @@
     return !v || (typeof isJunk === "function" && isJunk(v)) ||
            (typeof NONPAYS !== "undefined" && NONPAYS.has && NONPAYS.has(v));
   }
-
   function topByValue(obj, n) {
-    return Object.keys(obj)
-      .sort(function (a, b) { return obj[b] - obj[a]; })
-      .slice(0, n);
+    return Object.keys(obj).sort(function (a, b) { return obj[b] - obj[a]; }).slice(0, n);
   }
 
-  // ---- agrégation : articles reliant (valeur départ -> valeur arrivée) ----
   function buildGraphData(rows, srcDim, tgtDim, topN) {
-    var edge = {};                 // key -> { from, to, w }
-    var srcTot = {}, tgtTot = {};
+    var edge = {}, srcTot = {}, tgtTot = {};
     rows.forEach(function (r) {
       var a = r[srcDim], b = r[tgtDim];
       if (isBad(a) || isBad(b)) return;
-      if (srcDim === tgtDim && a === b) return;   // pas de boucle sur soi-même
-      var k = a + "\n" + b;                        // \n : séparateur absent des valeurs
+      if (srcDim === tgtDim && a === b) return;
+      var k = a + "\n" + b;
       var e = edge[k] || (edge[k] = { from: a, to: b, w: 0 });
       e.w += 1;
       srcTot[a] = (srcTot[a] || 0) + 1;
       tgtTot[b] = (tgtTot[b] || 0) + 1;
     });
-
     var keepSrc = new Set(topByValue(srcTot, topN));
     var keepTgt = new Set(topByValue(tgtTot, topN));
 
@@ -95,7 +84,6 @@
       n.roles[role] = true;
       return n;
     }
-
     var edges = [];
     Object.keys(edge).forEach(function (k) {
       var e = edge[k];
@@ -124,14 +112,49 @@
     return { nodes: visNodes, edges: edges };
   }
 
-  // ---- clic sur un nœud → fiche existante ----
   function openNode(id, kind) {
     if (kind === "media" && typeof openSource === "function") return openSource(id);
     if (kind === "theme" && typeof openTheme === "function") return openTheme(id);
     if (typeof openCountry === "function") return openCountry(id);
   }
 
-  // ---- construction / rendu ----
+  // ---- survol : ne garder que le nœud, ses liens et ses voisins ----
+  function highlightNeighbors(nodeId) {
+    var conn = {}; conn[nodeId] = 1;
+    var connE = {};
+    state.edgesRaw.forEach(function (e) {
+      if (e.from === nodeId || e.to === nodeId) { conn[e.from] = 1; conn[e.to] = 1; connE[e.id] = 1; }
+    });
+    state.nodesDS.update(state.nodesRaw.map(function (n) {
+      var on = conn[n.id];
+      return { id: n.id,
+        color: on ? n.color : { background: "#2a3245", border: "#2a3245" },
+        font: { color: on ? "#e8ecf4" : "rgba(232,236,244,0.10)", size: 14, strokeWidth: 3, strokeColor: "#0f1420" } };
+    }));
+    state.edgesDS.update(state.edgesRaw.map(function (e) {
+      var on = connE[e.id];
+      return { id: e.id, color: { color: on ? "#4f8cff" : "#161c28", opacity: on ? 0.9 : 0.05, highlight: "#4f8cff" } };
+    }));
+  }
+  function resetHighlight() {
+    if (!state.nodesDS) return;
+    state.nodesDS.update(state.nodesRaw.map(function (n) {
+      return { id: n.id, color: n.color,
+        font: { color: "#e8ecf4", size: 14, strokeWidth: 3, strokeColor: "#0f1420" } };
+    }));
+    state.edgesDS.update(state.edgesRaw.map(function (e) {
+      return { id: e.id, color: { color: "#8ba0c0", opacity: 0.35, highlight: "#4f8cff" } };
+    }));
+  }
+
+  // ---- gel / animation de la disposition ----
+  function setFrozen(f) {
+    state.frozen = f;
+    if (state.network) state.network.setOptions({ physics: { enabled: !f } });
+    var b = document.getElementById("graphFreeze");
+    if (b) b.textContent = f ? "▶ Animer" : "❄ Figer";
+  }
+
   function render() {
     if (!state.built && !injectTab()) return;
     var host = document.getElementById("graphCanvas");
@@ -141,30 +164,25 @@
     info.textContent = "Chargement du moteur de graphe…";
     loadVis().then(function () {
       var g = buildGraphData(DATA, state.src, state.tgt, state.topN);
-      if (!g.edges.length) {
-        info.textContent = "Aucun lien pour ce couple de dimensions.";
-        host.innerHTML = "";
-        return;
-      }
+      if (!g.edges.length) { info.textContent = "Aucun lien pour ce couple de dimensions."; host.innerHTML = ""; return; }
       info.innerHTML = "<b>" + g.nodes.length + "</b> nœuds · <b>" + g.edges.length +
         "</b> liens · " + DIMS[state.src].label.toLowerCase() +
         " <span style='color:#4f8cff'>➜</span> " + DIMS[state.tgt].label.toLowerCase() +
-        " · tout le corpus (top " + state.topN + " par côté)";
+        " · tout le corpus (top " + state.topN + " par côté) · survole un nœud pour isoler ses liens";
 
-      var data = {
-        nodes: new vis.DataSet(g.nodes),
-        edges: new vis.DataSet(g.edges.map(function (e, i) {
-          return { id: i, from: e.from, to: e.to, value: e.value, title: e.title,
-                   arrows: "to",
-                   color: { color: "#8ba0c0", opacity: 0.35, highlight: "#4f8cff" },
-                   smooth: { type: "continuous" } };
-        }))
-      };
+      state.nodesRaw = g.nodes;
+      state.edgesRaw = g.edges.map(function (e, i) {
+        return { id: i, from: e.from, to: e.to, value: e.value, title: e.title,
+                 arrows: "to", color: { color: "#8ba0c0", opacity: 0.35, highlight: "#4f8cff" },
+                 smooth: { type: "continuous" } };
+      });
+      state.nodesDS = new vis.DataSet(state.nodesRaw);
+      state.edgesDS = new vis.DataSet(state.edgesRaw);
+
       var options = {
-        nodes: { shape: "dot", scaling: { min: 8, max: 46,
-                 label: { enabled: true, min: 11, max: 22 } }, borderWidth: 1 },
+        nodes: { shape: "dot", scaling: { min: 8, max: 46, label: { enabled: true, min: 11, max: 22 } }, borderWidth: 1 },
         edges: { scaling: { min: 0.4, max: 9 }, selectionWidth: 2 },
-        interaction: { hover: true, tooltipDelay: 120, navigationButtons: false, keyboard: false },
+        interaction: { hover: true, tooltipDelay: 120, hideEdgesOnDrag: true },
         physics: {
           solver: "forceAtlas2Based",
           forceAtlas2Based: { gravitationalConstant: -55, centralGravity: 0.012,
@@ -173,20 +191,21 @@
         }
       };
       if (state.network) { state.network.destroy(); state.network = null; }
-      state.network = new vis.Network(host, data, options);
+      state.network = new vis.Network(host, { nodes: state.nodesDS, edges: state.edgesDS }, options);
+      setFrozen(false);
+
       var kindOf = {};
-      g.nodes.forEach(function (n) { kindOf[n.id] = n._kind; });
-      state.network.on("click", function (params) {
-        if (params.nodes && params.nodes.length)
-          openNode(params.nodes[0], kindOf[params.nodes[0]]);
-      });
+      state.nodesRaw.forEach(function (n) { kindOf[n.id] = n._kind; });
+      state.network.on("click", function (p) { if (p.nodes && p.nodes.length) openNode(p.nodes[0], kindOf[p.nodes[0]]); });
+      state.network.on("hoverNode", function (p) { highlightNeighbors(p.node); });
+      state.network.on("blurNode", function () { resetHighlight(); });
+      // fige tout seul une fois la disposition stabilisée
+      state.network.once("stabilizationIterationsDone", function () { setFrozen(true); });
     }).catch(function (e) {
-      info.textContent = "⚠ Impossible de charger le moteur de graphe (" + e.message +
-        "). Vérifie ta connexion, ou réessaie.";
+      info.textContent = "⚠ Impossible de charger le moteur de graphe (" + e.message + "). Vérifie ta connexion, ou réessaie.";
     });
   }
 
-  // ---- injection de l'onglet + du panneau ----
   function injectTab() {
     var tabs = document.querySelector(".tabs");
     var main = document.querySelector("main");
@@ -201,8 +220,7 @@
 
     var dimOpts = function (sel) {
       return Object.keys(DIMS).map(function (k) {
-        return '<option value="' + k + '"' + (k === sel ? " selected" : "") + ">" +
-          DIMS[k].label + "</option>";
+        return '<option value="' + k + '"' + (k === sel ? " selected" : "") + ">" + DIMS[k].label + "</option>";
       }).join("");
     };
 
@@ -214,8 +232,8 @@
       '<h2 style="margin-bottom:6px">🕸️ Graphe pondéré</h2>' +
       '<p class="count" style="margin-bottom:12px">Chaque nœud est une entité ; ' +
       'un lien A ➜ B = nombre d\'articles reliant la valeur de départ à celle d\'arrivée ' +
-      '(flèche = sens, épaisseur = poids). Clique un nœud pour ouvrir sa fiche. ' +
-      'Molette = zoom, glisser = déplacer.</p>' +
+      '(flèche = sens, épaisseur = poids). Survole un nœud pour n\'afficher que ses liens ; ' +
+      'clique-le pour ouvrir sa fiche. Molette = zoom, glisser = déplacer.</p>' +
       '<div class="chartctl" style="margin-bottom:12px;align-items:flex-end">' +
         '<div><label style="display:block;font-size:.78rem;color:var(--muted);margin-bottom:5px">Nœud de départ</label>' +
           '<select id="graphSrc">' + dimOpts(state.src) + "</select></div>" +
@@ -229,6 +247,7 @@
             }).join("") + "</select></div>" +
         '<div><button class="go" id="graphBtn">▶ Générer</button></div>' +
         '<div><button id="graphSwap" title="Inverser départ et arrivée">⇄ Inverser</button></div>' +
+        '<div><button id="graphFreeze" title="Figer / relancer la disposition">❄ Figer</button></div>' +
       "</div>" +
       '<div class="count" id="graphInfo" style="margin-bottom:8px">Choisis tes dimensions puis clique sur <b>&nbsp;Générer&nbsp;</b></div>' +
       '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin-bottom:8px">' +
@@ -249,8 +268,10 @@
       panel.querySelector("#graphTgt").value = state.tgt;
       render();
     });
+    panel.querySelector("#graphFreeze").addEventListener("click", function () {
+      if (state.network) setFrozen(!state.frozen);
+    });
 
-    // onglet Graphe : montrer le graphe / masquer les autres panneaux
     tab.addEventListener("click", function () {
       document.querySelectorAll(".tab").forEach(function (x) { x.classList.remove("active"); });
       tab.classList.add("active");
@@ -259,13 +280,9 @@
       });
       panel.style.display = "";
     });
-    // clic sur un AUTRE onglet : masquer le graphe
     document.querySelectorAll(".tab").forEach(function (t) {
       if (t.dataset.tab !== "graph")
-        t.addEventListener("click", function () {
-          panel.style.display = "none";
-          tab.classList.remove("active");
-        });
+        t.addEventListener("click", function () { panel.style.display = "none"; tab.classList.remove("active"); });
     });
 
     state.built = true;

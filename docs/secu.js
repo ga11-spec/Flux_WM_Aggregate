@@ -87,7 +87,7 @@
       '<div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin:0 0 16px">' +
         '<div style="background:linear-gradient(135deg,#12325e,#1d4f8c);border:1px solid #2f6cbf;border-radius:12px;padding:12px 26px;text-align:center">' +
           '<b style="font-size:2.2rem;color:#7db4ff">' + note + '</b>' +
-          '<div style="color:#a9c6ee;font-size:.82rem">NOTE DE SÉCURITÉ</div>' +
+          '<div style="color:#a9c6ee;font-size:.82rem">FIABILITÉ AÉRONAVALE</div>' +
         '</div>' +
         '<div style="color:var(--muted);font-size:.9rem">' +
           '⚓ <b style="color:var(--text)">' + naveaux.length + '</b> article(s) à signal naval sur ' + arts.length + '<br>' +
@@ -114,7 +114,7 @@
     if (thead && !document.getElementById('th-sec')) {
       var th = document.createElement('th');
       th.id = 'th-sec';
-      th.textContent = '🛡 Sécurité ⇅';
+      th.textContent = '🛡 Fiab. aéronavale ⇅';
       th.style.cursor = 'pointer';
       th.onclick = function () { setSort('sec'); };
       thead.appendChild(th);
