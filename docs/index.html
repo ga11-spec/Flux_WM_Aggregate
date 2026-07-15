@@ -123,7 +123,9 @@ button.go:hover{background:#1c8a5c;border-color:#1c8a5c}
       <span style="display:inline-block;width:26px;height:12px;border-radius:3px;background:rgba(246,193,60,.09);vertical-align:middle"></span> 1-10
       <span style="display:inline-block;width:26px;height:12px;border-radius:3px;background:rgba(246,193,60,.16);vertical-align:middle"></span> 11-20
       <span style="display:inline-block;width:26px;height:12px;border-radius:3px;background:rgba(246,193,60,.23);vertical-align:middle"></span> 21-30
-      <span style="display:inline-block;width:26px;height:12px;border-radius:3px;background:rgba(246,193,60,.32);vertical-align:middle"></span> 31+
+      <span style="display:inline-block;width:26px;height:12px;border-radius:3px;background:rgba(246,193,60,.30);vertical-align:middle"></span> 31-40
+      <span style="display:inline-block;width:26px;height:12px;border-radius:3px;background:rgba(246,193,60,.38);vertical-align:middle"></span> 41-50
+      <span style="display:inline-block;width:26px;height:12px;border-radius:3px;background:rgba(246,193,60,.47);vertical-align:middle"></span> 50+
       · trier via l'en-tête ⚓
     </div>
   </div>
@@ -239,7 +241,7 @@ function prepare(arr){ arr.forEach(r => {
   r.an = r.d ? r.d.slice(0,4) : '';
   r.lg = r.lg || 'en';
   r.no = r.no || 'F';
-  r.rm = r.rm || '';
+  r.rm = r.rm || '';   r.sec = +(((6-(r.fi==null?5:r.fi))*(r.nv||0))/100).toFixed(2);
   r._s = (r.t+' '+(r.tv||'')+' '+r.m+' '+r.ca+' '+r.ch+' '+r.rg+' '+r.sa+' '+r.sm).toLowerCase();
 }); }
 
@@ -332,7 +334,7 @@ function filtered(){
 }
 
 // ---------- tableau ----------
-const COLS = [['d','Date'],['m','Média'],['t','Titre'],['ca','Pays traité'],['rg','Région'],['sa','Thème'],['no','Note'],['nv','⚓ Naval']];
+const COLS = [['d','Date'],['m','Média'],['t','Titre'],['ca','Pays traité'],['rg','Région'],['sa','Thème'],['no','Note'],['nv','⚓ Naval'],['sec','🛡 Sécurité']];
 document.getElementById('thead').innerHTML = COLS.map(([k,l])=>`<th onclick="setSort('${k}')">${l} ⇅</th>`).join('');
 function setSort(k){ if(sortKey===k) sortDir*=-1; else {sortKey=k; sortDir=1;} renderTable(); }
 
@@ -637,12 +639,12 @@ function openSource(m){
     </p>
     <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin:0 0 16px">
       <div style="background:linear-gradient(135deg,#12325e,#1d4f8c);border:1px solid #2f6cbf;border-radius:12px;padding:12px 26px;text-align:center">
-        <b style="font-size:2.2rem;color:#7db4ff">${(arts.reduce((s,r)=>s+(r.ip||0),0)/Math.max(arts.length,1)).toFixed(2)}</b>
-        <div style="color:#a9c6ee;font-size:.82rem">FIABILITÉ NAVALE /1</div>
+        <b style="font-size:2.2rem;color:#7db4ff">${(()=>{const n=arts.filter(r=>r.nv>=1);return n.length?(n.reduce((s,r)=>s+(r.sec||0),0)/n.length).toFixed(2):'0.00';})()}</b>
+        <div style="color:#a9c6ee;font-size:.82rem">NOTE DE SÉCURITÉ</div>
       </div>
       <div style="color:var(--muted);font-size:.9rem">
         ⚓ <b style="color:var(--text)">${arts.filter(r=>r.nv>0).length}</b> article(s) à signal naval sur ${arts.length}<br>
-        <small>moyenne du composite « intérêt par fiabilité » (60 % fiabilité de la source + 40 % intérêt naval) sur tous les articles</small>
+        <small>moyenne de la note de sécurité (6−fiabilité)×naval÷100 sur les seuls articles à signal naval ≥ 1 (0 s'il n'y en a aucun)</small>
       </div>
     </div>
     ${svgMap({counts, hq:o.ch, height:300})}
@@ -718,8 +720,8 @@ function realSvgMap({counts={}, hq=null, only=null, height=320}){
 }
 
 // teinte bleue par palier de score naval : 1-10, 11-20, 21-30, 31-40
-const NAV_STEPS = [[10,0.09],[20,0.16],[30,0.23],[1e9,0.32]];
-const navAlpha = nv => { for(const [max,a] of NAV_STEPS){ if(nv<=max) return a; } return 0.32; };
+const NAV_STEPS = [[10,0.09],[20,0.16],[30,0.23],[40,0.30],[50,0.38],[1e9,0.47]]; 
+const navAlpha = nv => { for(const [max,a] of NAV_STEPS){ if(nv<=max) return a; } return 0.47; };
 const navStyle = nv => nv>0 ? ` style="background:rgba(246,193,60,${navAlpha(nv)})"` : '';
 
 const artRow = r=>`<tr${navStyle(r.nv)}>
