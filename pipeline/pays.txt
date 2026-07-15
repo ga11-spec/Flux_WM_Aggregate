@@ -53,7 +53,7 @@ Haiti: *haiti, *haitian, *port-au-prince
 Hong Kong: *hong kong
 Hungary: *hungary, *hungarian, *budapest, *orban
 Iceland: *iceland, *icelandic, *reykjavik
-India: *india, *indian, *delhi, *modi, india's, india’s, monsoon, reliance, aims, *mumbai, *kashmir, *bollywood, *new delhi, Andhra Pradesh, Arunachal Pradesh, assam, bihar, chandigarh, chhattisgarh, goa, gujarat, haryana, himachal pradesh, jammu, cachemire, harkhand, karnataka, kerala, ladakh, lakshadweep, madhya pradesh, maharashtra, manipur, meghalaya, mizoram, nagaland, odisha, pendjab, rajasthan, sikkim, tamil nadu, telangana, tripura, uttarakhand, uttar pradesh
+India: *india, *indian, *delhi, *modi, india's, india’s, monsoon, reliance, aims, *mumbai, *kashmir, *bollywood, *new delhi, *Andhra Pradesh, *Arunachal Pradesh, *assam, bihar, *chandigarh, *chhattisgarh, *goa, *gujarat, *haryana, *himachal pradesh, *jammu, *cachemire, *harkhand, *karnataka, *kerala, *ladakh, *lakshadweep, *madhya pradesh, *maharashtra, *manipur, *meghalaya, *mizoram, *nagaland, *odisha, *pendjab, *rajasthan, *sikkim, *tamil nadu, *telangana, *tripura, *uttarakhand, *uttar pradesh
 Indonesia: *indonesia, *indonesian, *jakarta, *prabowo, msci, emerging
 Iran: *iran, *iranian, *tehran, *khamenei, evacuation, iran's, iran’s, proxies, *irgc, *revolutionary guard, *natanz, *fordow
 Iraq: *iraq, *iraqi, *baghdad, opec
