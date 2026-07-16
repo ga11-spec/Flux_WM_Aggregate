@@ -6,9 +6,9 @@
         <script src="secu.js"></script>
 
    Ajoute, SANS toucher au reste d'index.html :
-     • une colonne « 🛡 Sécurité » dans le tableau (triable),
+     • une colonne « 🛡 Fiab. aéronavale » dans le tableau (triable),
        note = (6 − indice_fiabilité) × intérêt naval ÷ 100 ;
-     • la « NOTE DE SÉCURITÉ » par média dans les fiches source
+     • la « FIABILITÉ AÉRONAVALE » par média dans les fiches source
        (moyenne des seuls articles à signal naval ≥ 1, sinon 0) ;
      • les paliers de couleur navale étendus : 31-40, 41-50, 50+.
    Réutilise les fonctions/données déjà présentes (DATA, filtered, esc, disp,
@@ -109,16 +109,17 @@
   }
 
   // ---- en-tête de colonne + légende ----
-  function addHeader() {
+  // Reconstruit TOUT l'en-tête : écrase toute colonne « Sécurité » laissée par
+  // d'anciennes modifs manuelles et garantit 9 colonnes alignées sur le rendu.
+  function rebuildHeader() {
     var thead = document.getElementById('thead');
-    if (thead && !document.getElementById('th-sec')) {
-      var th = document.createElement('th');
-      th.id = 'th-sec';
-      th.textContent = '🛡 Fiab. aéronavale ⇅';
-      th.style.cursor = 'pointer';
-      th.onclick = function () { setSort('sec'); };
-      thead.appendChild(th);
-    }
+    if (!thead) return;
+    var cols = [['d', 'Date'], ['m', 'Média'], ['t', 'Titre'], ['ca', 'Pays traité'],
+                ['rg', 'Région'], ['sa', 'Thème'], ['no', 'Note'], ['nv', '⚓ Naval'],
+                ['sec', '🛡 Fiab. aéronavale']];
+    thead.innerHTML = cols.map(function (c) {
+      return '<th style="cursor:pointer" onclick="setSort(\'' + c[0] + '\')">' + c[1] + ' ⇅</th>';
+    }).join('');
   }
 
   function updateLegend() {
@@ -138,12 +139,28 @@
     }
   }
 
+  // --- retire les non-pays (ASEAN, G7, WHO…) et les valeurs indéterminées des filtres pays ---
+  function cleanCountryFilters() {
+    ['f_ca', 'f_ch'].forEach(function (id) {
+      var sel = document.getElementById(id);
+      if (!sel) return;
+      Array.prototype.slice.call(sel.options).forEach(function (o) {
+        if (o.value && (NONPAYS.has(o.value) || (typeof isJunk === 'function' && isJunk(o.value)))) o.remove();
+      });
+    });
+  }
+
   ready(function () {
     if (typeof filtered !== 'function' || typeof DATA === 'undefined') return;
-    addHeader();
+    rebuildHeader();
     updateLegend();
     window.renderTable = newRenderTable;   // remplace le rendu du tableau
     window.openSource = newOpenSource;     // remplace la fiche média
+    if (typeof window.buildFilters === 'function') {
+      var _bf = window.buildFilters;
+      window.buildFilters = function () { _bf.apply(this, arguments); cleanCountryFilters(); };
+      try { window.buildFilters(); } catch (e) {}   // reconstruit les filtres sans les non-pays
+    }
     try { newRenderTable(); } catch (e) {}
   });
 })();
