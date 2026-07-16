@@ -1733,7 +1733,7 @@ function boot(){
       id: "interet-naval",
       title: "Indice d'intérêt naval",
       author: "",
-      date: "2026-07-15",
+      date: "2026-07-16",
       tags: ["méthodologie", "indice"],
       summary: "Utilité et construction de l'indice d'intérêt naval, sa notation et son utilisation dans le site.",
       body:
@@ -1753,6 +1753,24 @@ function boot(){
         <h3>Un indice d'information</h3>
         <p>Cet indice a d'abord un objectif d'information, de soutien à l'analyse et de pré-traitement des sources. Il ne représente pas une vérité absolue sur l'importance d'un article dans le domaine aéronaval : il se fonde uniquement sur les titres. La vérification et l'étude des articles par un humain restent évidemment souhaitables pour un travail complet.</p>
         <p>L'indice d'intérêt naval sert enfin à calculer l'indice combiné de fiabilité et d'intérêt aéronaval, dont nous parlerons plus loin.</p>`
+    },
+    {
+      id: "fiabilite-intérêt-naval",
+      title: "Indice de fiabilité et d'intérêt naval",
+      author: "",
+      date: "2026-07-16",
+      tags: ["méthodologie", "indice"],
+      summary: "Description de l'indice de fiabilité et d'intérêt naval combiné",
+      body:
+        `<p>L'indice de fiabilité et d'intérêt naval est un calcul qui permet de mesurer la sécurité vis-à-vis de des articles ayant un intérêt naval.</p>
+        <h3>Un calcul simple</h3>
+        <p>Pour construire cet indice, un <b>calcul</b> est fait, basé sur les indices de notation de fiabilité de <b>l'OTAN</b> (A-F) et l'intérêt naval calculé grâce aux <b>mots clés</b>.</p>
+        <blockquote>La notation OTAN pèse pour 50% du total, de même que l'indice d'intérêt naval (50%).</blockquote>
+        <p>Le calcul est le suivant :</p>
+        <p>(Chiffre relié à la notation OTAN (A=1, B=2, etc...)/par 100)*(intérêt naval/100). Le tout est multiplié par 100 afin d'atteindre un chiffre intelligible.</p>
+        <blockquote>Exemple : un article d'une source de niveau B ayant un score naval de 15 donnera : ((2/100)*(15/100))*100 = 0,3.</blockquote>
+        <h3>Compréhension de l'indice</h3>
+        <p>Cet indice permet donc de classer les articles à la fois au regard de leur intérêt pour le groupe aéronaval, ainsi que de la qualité/fiabilité de la source en question. Évidemment, cet indice reste, comme son nom l'indique, un indice... Il ne représente pas une notation pure et parfaite des sources, mais permet un classement ayant un réel intérêt dans un objectif de veille informationnelle ou de surveillance médiatique<p>.`
     }
   ];
   /* ====================== FIN DES BILLETS ================================== */
