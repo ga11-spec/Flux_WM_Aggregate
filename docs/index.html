@@ -1730,7 +1730,32 @@ function boot(){
         "OTAN [NAT 03] — doctrine de cotation : fiabilité de la source (A-F, tableau 4.1) et véracité de l'information (1-6, tableau 4.2)."
       ]
     }
-  ];
+  ]; 
+    {
+       id: "intérêt-naval",
+       title: "Indice d'intérêt naval",
+       author: "",
+       date: "2026-07-15",
+       tags: ["méthodologie", "indice"],
+       summary: "Explication de l'utilité et de la construction de <b>l'indice d'intérêt naval</b> et de sa notation et utilisation dans le site",
+       body: 
+      `<p>L'indice d'intérêt naval est un indicateur servant à mesurer <b>l'importance d'un article</b> pour le groupe aéronaval. Celui-ci est un pipeline, qui en analysant les titres des articles donne une note à chacun d'entre eux. Il n'y a pas de note maximale.<p>
+      <h3>Une suite de mots clés pondéré<h3>
+      <p>Afin de construire cet indice, une série de mots-clés ont été pondérés. Certains mots-clés valent dont un certains nombre de point, basé sur leur leur importance d'un point de vue aéronaval.<p>
+      <h3>Le classement des mots clés<h3>
+      <ul>
+      <li><b>20 points</b> : navy, aircraft carrier, submarine, warship, destroyer, frigate, naval fleet, naval blockade, naval base, naval exercise, aukus, amphibious assault<li>
+      <li><b>14 points</b> (espaces stratégiques) : strait of hormuz, taiwan strait, south china sea, red sea, suez canal, panama canal, strait of malacca, bab-el-mandeb<li> 
+      <li><b>10 points</b> : corvette, cruiser, coast guard, shipyard, naval contract, naval modernization, tanker, cargo ship, container ship, hijacked ship, ship seized, Houthi, piracy<li>
+      <li><b>5 points</b> : vessel, fleet, maritime trade, shipping lane, dock, harbor, admiral, sailor, flotilla<li>
+      <li><b>2 points</b> : ship, sea, ocean, coastal, port<li>
+      <p>Les mots clés de cette liste sont ensuite lu dans les titres des articles, permettant de fournir une note d'intérêt naval. Sur le site final, la note est indiquée dans la colonne "Naval", à coté de la note.<p>
+      <blockquote> Par exemple, le titre : 	"Iran's new naval blockade from the US began with 20 warships and hundreds of military aircraft" fait un total de 40 points.<blockquote>
+      <h3>Un index d'information<h3>
+      <p>Cet index a un objectif en premier lieu d'information, de soutien à l'analyse et de pré-traitement des sources. Il ne représente pas une vérité absolue sur l'importance des sources dans le domaine aéronaval, se basant uniquement sur les titres des articles. La vérification et l'étude par un humain des articles est évidemment plus que souhaitable pour permettre un travail complet.<p>
+      <p>L'indice d'intérêt naval est enfin utilisé afin de calculer l'indice combiné de fiabilité et d'intérêt aéronaval, donc nous discuterons après.<p>`,
+       refs: ["Référence 1", "Référence 2"]   // optionnel
+     }
   /* ====================== FIN DES BILLETS ================================== */
 
   function ready(fn) {
