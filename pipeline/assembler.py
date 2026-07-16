@@ -1,15 +1,24 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Assembleur — enchaîne tout le pipeline :
- 1. classifie les nouveaux logs (logs.csv, produits par collecteur.py) ;
- 2. les fusionne dans l'historique consolide_master.csv (dédoublonnage par lien) ;
- 3. régénère les fichiers du site : site/data.js, site/world_monitor.csv,
-    site/world_monitor.xlsx, site/world_monitor.db.
+Assembleur — enchaîne tout le pipeline.
 
-Usage :
-    python3 assembler.py            # logs.csv → master → site/
-    python3 assembler.py --no-logs  # régénère seulement le site depuis le master
+DEUX MODES pour éviter que chaque passage soit de plus en plus long / lourd :
+
+  python3 assembler.py            (mode LÉGER, à chaque cron)
+      • traduit seulement les titres pas encore traduits (incrémental) ;
+      • classe les nouveaux logs et les ajoute à l'archive ;
+      • régénère UNIQUEMENT le fichier du site data.js (+ meta.json).
+      → l'archive déjà traitée n'est PAS re-scannée, les gros exports ne sont
+        PAS régénérés : le temps par passage reste proportionnel au nouveau
+        contenu, et le dépôt git ne gonfle presque plus.
+
+  python3 assembler.py --full     (mode COMPLET, à la demande / hebdo)
+      • re-scanne TOUTE l'archive (bans, dates, fusions, fiches, rescore naval
+        déplafonné, régions maritimes) — utile quand tu changes tes dictionnaires ;
+      • régénère aussi les gros exports : world_monitor.csv / .db / .xlsx.
+
+  python3 assembler.py --no-logs  régénère le site depuis l'archive sans classer.
 """
 import csv, json, sys, os, sqlite3, argparse, subprocess, tempfile
 from pathlib import Path
@@ -46,7 +55,9 @@ def num(v):
         return None
 
 
-def build_site(rows, added=0):
+def build_site(rows, added=0, heavy=False):
+    """Génère toujours data.js + meta.json (légers, nécessaires au site).
+    Ne régénère les gros exports (CSV / SQLite / XLSX) que si heavy=True."""
     SITE.mkdir(exist_ok=True)
     # --- meta.json (horodatage affiché par le bouton Actualiser) ---
     import datetime
@@ -76,6 +87,9 @@ def build_site(rows, added=0):
         "</script", "<\\/script") + ";"
     (SITE / "data.js").write_text(js, encoding="utf-8")
 
+    if not heavy:
+        return   # mode léger : on s'arrête là, pas de gros exports recommités
+
     # --- CSV téléchargeable ---
     with open(SITE / "world_monitor.csv", "w", encoding="utf-8-sig",
               newline="") as f:
@@ -92,7 +106,7 @@ def build_site(rows, added=0):
                 ", ".join(f'"{c}"' for c in COLS))
     con.executemany("INSERT INTO articles VALUES (%s)" %
                     ",".join("?" * len(COLS)),
-                    [[r.get(c,"") for c in COLS] for r in rows])
+                    [[r.get(c, "") for c in COLS] for r in rows])
     con.commit()
     con.close()
 
@@ -108,27 +122,17 @@ def build_site(rows, added=0):
                        c in ("official_rating", "indice_fiabilite",
                              "fiabilité_calcul", "indice_interet_naval",
                              "fiabilité2", "intérêt marine calcul",
-                             "intérêt_par_fiabilité") else r.get(c,"") for c in COLS])
+                             "intérêt_par_fiabilité") else r.get(c, "") for c in COLS])
         wb.save(SITE / "world_monitor.xlsx")
     except ImportError:
         print("(openpyxl absent : export XLSX sauté)")
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--logs", default=str(HERE / "logs.csv"))
-    ap.add_argument("--no-logs", action="store_true",
-                    help="ne pas classifier, juste régénérer le site")
-    args = ap.parse_args()
-
-    rows = read_csv(MASTER) if MASTER.exists() else []
-    print(f"historique : {len(rows)} articles")
-
-    # ---- migration rétroactive (idempotente, à chaque passage) ----
+def passe_traduction(rows):
+    """Passe LÉGÈRE, à chaque exécution : ne traduit que les titres pas encore
+    traduits (langue inconnue, ou non anglais sans titre_vo). Incrémental :
+    une fois l'archive rattrapée, ne concerne plus que les nouveaux titres."""
     sys.path.insert(0, str(HERE))
-    import classify
-    alias = classify.load_alias(HERE / "medias_alias.csv")
-    bans = classify.load_bans(HERE / "medias_bannis.txt")
     import traduction
     med_langues = traduction.load_medias_langues()
     print("moteur de traduction :", traduction.moteur_statut())
@@ -136,19 +140,8 @@ def main():
                      if (r.get("langue") or "") not in ("", "en")
                      and not (r.get("titre_vo") or "").strip())
     print(f"titres non anglais en attente de traduction : {a_traduire}")
-    medias = {}
-    with open(HERE / "medias.csv", encoding="utf-8") as f:
-        for m in csv.DictReader(f, delimiter=";"):
-            medias[m["media"].strip().lower()] = m
-    naval_pats = classify.load_naval(HERE / "naval.txt")
-    zones = classify.load_zones(HERE / "regions_maritimes.txt")
-    propres, n_ban, n_trad, n_dates, n_fusion, n_fiab, n_fiche, n_naval = [], 0, 0, 0, 0, 0, 0, 0
+    n_trad = 0
     for r in rows:
-        if classify.est_banni(r["nom_du_media"], bans):
-            n_ban += 1
-            continue
-        # traduction rétroactive : langue inconnue, OU non anglais pas encore
-        # traduit (on retente à chaque passage jusqu'à réussite)
         lg = (r.get("langue") or "").strip()
         if not lg or (lg != "en" and not (r.get("titre_vo") or "").strip()):
             t, vo, lang = traduction.ensure_english(
@@ -159,6 +152,30 @@ def main():
                 r["titre"], r["titre_vo"] = t, vo
             else:
                 r.setdefault("titre_vo", "")
+    if n_trad:
+        print(f"traduction : {n_trad} titres traduits")
+    return n_trad > 0
+
+
+def migration_complete(rows):
+    """Passe COMPLÈTE (mode --full uniquement) : re-scanne toute l'archive pour
+    réappliquer les dictionnaires (bans, fusions, fiches, rescore naval, régions).
+    C'est ce qui coûte O(N) : on ne le fait que sur demande."""
+    sys.path.insert(0, str(HERE))
+    import classify
+    alias = classify.load_alias(HERE / "medias_alias.csv")
+    bans = classify.load_bans(HERE / "medias_bannis.txt")
+    medias = {}
+    with open(HERE / "medias.csv", encoding="utf-8") as f:
+        for m in csv.DictReader(f, delimiter=";"):
+            medias[m["media"].strip().lower()] = m
+    naval_pats = classify.load_naval(HERE / "naval.txt")
+    zones = classify.load_zones(HERE / "regions_maritimes.txt")
+    propres, n_ban, n_dates, n_fusion, n_fiab, n_fiche, n_naval = [], 0, 0, 0, 0, 0, 0
+    for r in rows:
+        if classify.est_banni(r["nom_du_media"], bans):
+            n_ban += 1
+            continue
         d2 = classify.norm_date(r["time_stamp"])
         if d2 != r["time_stamp"]:
             n_dates += 1
@@ -168,13 +185,12 @@ def main():
             n_fusion += 1
             r["nom_du_media"] = can
             m = medias.get(can.lower())
-            if m:  # hérite de la fiche du média canonique
+            if m:
                 r["country_headquarters"] = m["pays_siege"] or r["country_headquarters"]
                 r["sujet_media"] = m["theme_media"] or r["sujet_media"]
                 r["official_rating"] = m["note"] or r["official_rating"]
-        # fiche média : source de vérité = medias.csv ; inconnu → F et 4,5
         fm = medias.get(r["nom_du_media"].strip().lower())
-        if fm:  # complète siège / thème / note officielle manquants
+        if fm:
             if fm.get("pays_siege") and (r.get("country_headquarters") or "") \
                in ("", "Undetermined", "None"):
                 r["country_headquarters"] = fm["pays_siege"]
@@ -190,7 +206,6 @@ def main():
             fi_new = 4.5
         fi_new = int(fi_new) if fi_new == int(fi_new) else fi_new
         r["notation"] = no
-        # rescore naval (déplafonné) sur le titre — rétroactif
         nv_new = classify.score_naval(r["titre"], naval_pats)
         r["region_maritime"] = classify.zone_maritime(r["titre"], zones)
         if num(r.get("indice_interet_naval")) != nv_new:
@@ -205,16 +220,39 @@ def main():
             r["intérêt marine calcul"] = round(nv_new * 0.4 / 40, 4)
             r["intérêt_par_fiabilité"] = round(0.6 / fi_new + nv_new * 0.4 / 40, 4)
         propres.append(r)
-    if n_ban or n_trad or n_dates or n_fusion or n_fiab or n_fiche or n_naval:
-        print(f"migration : {n_trad} titres traduits, {n_ban} doublons retirés,"
-              f" {n_dates} dates normalisées, {n_fusion} fusions de médias,"
-              f" {n_fiab} notes/fiabilités mises à jour, {n_fiche} sièges complétés,"
-              f" {n_naval} scores navals recalculés (déplafonnés)")
-        rows = propres
+    print(f"migration complète : {n_ban} doublons retirés, {n_dates} dates "
+          f"normalisées, {n_fusion} fusions, {n_fiab} notes/fiabilités, "
+          f"{n_fiche} sièges complétés, {n_naval} scores navals recalculés")
+    return propres
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--logs", default=str(HERE / "logs.csv"))
+    ap.add_argument("--no-logs", action="store_true",
+                    help="ne pas classifier, juste régénérer le site")
+    ap.add_argument("--full", action="store_true",
+                    help="re-scanner toute l'archive + régénérer les gros exports "
+                         "(CSV/DB/XLSX). À lancer à la demande / une fois par semaine.")
+    args = ap.parse_args()
+
+    rows = read_csv(MASTER) if MASTER.exists() else []
+    print(f"historique : {len(rows)} articles | mode : {'COMPLET' if args.full else 'léger'}")
+
+    # --- toujours : traduction incrémentale (ne touche que les non-traduits) ---
+    changed = passe_traduction(rows)
+
+    # --- seulement en --full : re-scan complet de l'archive figée ---
+    if args.full:
+        rows = migration_complete(rows)
+        changed = True
+
+    if changed:
         write_master(rows)
-    rows = propres
+
     liens = {r["lien"] for r in rows}
 
+    # --- nouveaux logs (à chaque passage) ---
     ajout = 0
     if not args.no_logs and Path(args.logs).exists():
         with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as tmp:
@@ -229,12 +267,12 @@ def main():
         os.unlink(out)
         print(f"+ {ajout} nouveaux articles classifiés")
         write_master(rows)
-        # les logs intégrés sont archivés puis vidés
         Path(args.logs).rename(str(args.logs) + ".integres")
 
     rows.sort(key=lambda r: r["time_stamp"] or "", reverse=True)
-    build_site(rows, ajout)
-    print(f"site régénéré ({len(rows)} articles) → {SITE}/")
+    build_site(rows, ajout, heavy=args.full)
+    print(f"site régénéré ({len(rows)} articles, exports lourds : "
+          f"{'oui' if args.full else 'non'}) → {SITE}/")
 
 
 if __name__ == "__main__":
