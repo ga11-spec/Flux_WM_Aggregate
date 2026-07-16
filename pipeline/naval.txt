@@ -6,7 +6,7 @@
 20: navy, aircraft carrier, submarine, submarines, warship, warships, destroyer, destroyers, frigate, frigates, naval fleet, naval blockade, naval base, naval exercise, aukus, amphibious assault
 
 # Zones / détroits stratégiques
-13: hormuz, strait of hormuz, taiwan strait, south china sea, red sea, suez canal, panama canal, strait of malacca, bab-el-mandeb
+14: hormuz, strait of hormuz, taiwan strait, south china sea, red sea, suez canal, panama canal, strait of malacca, bab-el-mandeb
 
 # Forts
 10: tankers, supertanker, supertankers, seafarers, corvette, cruiser, coast guard, shipyard, naval contract, naval modernization, tanker, cargo ship, container ship, hijacked ship, ship seized, houthi, houthis, piracy
