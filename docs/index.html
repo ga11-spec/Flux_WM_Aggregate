@@ -1700,30 +1700,33 @@ function boot(){
      ======================================================================== */
   var POSTS = [
     {
-      id: "exemple-methodo",
-      title: "Note méthodologique — indice de fiabilité aéronavale",
-      author: "World Monitor",
-      date: "2026-07-15",
-      tags: ["méthodologie", "indice", "exemple"],
-      summary: "Billet d'exemple : définition et calcul de l'indice de fiabilité aéronavale utilisé dans l'explorateur. À remplacer par tes propres documents.",
+      id: "notation-af",
+      title: "La notation A-F : l'échelle de fiabilité des sources",
+      author: "d'après Ph. Capet & A. Revault d'Allonnes (2013)",
+      date: "2026-07-16",
+      tags: ["méthodologie", "fiabilité", "renseignement"],
+      summary: "Origine et définition de l'échelle A-F qui cote la fiabilité des sources dans World Monitor, héritée de la doctrine de cotation du renseignement militaire (OTAN).",
       body:
-        '<p>Ce billet est un <b>exemple</b> destiné à montrer la mise en forme de la section Documentation. ' +
-        'Remplace-le par tes propres notes ; chaque document devient un billet indépendant.</p>' +
-        '<h3>Définition</h3>' +
-        '<p>L\'indice de fiabilité aéronavale d\'un article combine la fiabilité de la source et ' +
-        'l\'intérêt naval du titre, selon la formule :</p>' +
-        '<blockquote>fiabilité aéronavale = (6 − indice de fiabilité) × intérêt naval ÷ 100</blockquote>' +
-        '<p>L\'indice de fiabilité va de 1 (source la plus fiable) à 5 ; le terme (6 − indice) inverse ' +
-        'l\'échelle pour qu\'une source plus fiable pèse davantage.</p>' +
-        '<h3>Interprétation</h3>' +
-        '<ul>' +
-        '<li>Un article sans signal naval a une note nulle.</li>' +
-        '<li>La note par média est la moyenne des seuls articles à signal naval ≥ 1.</li>' +
-        '<li>Les valeurs élevées combinent une source fiable et un fort intérêt naval.</li>' +
-        '</ul>',
+        `<p>La colonne <b>Note</b> de World Monitor (A à F) évalue la <b>fiabilité de la source</b>, indépendamment du contenu d'un article donné. Cette échelle n'est pas arbitraire : elle reprend la <b>cotation du renseignement militaire</b>, formalisée par la doctrine de l'OTAN et identique en France.</p>
+        <h3>Une double échelle : fiabilité et véracité</h3>
+        <p>Dans le cycle du renseignement, une information est cotée sur <b>deux axes</b> : la <b>fiabilité de la source</b> (une lettre, A à F) et la <b>véracité de l'information</b> (un chiffre, 1 à 6). Leur combinaison forme un <i>bigramme</i> — par exemple <b>B2</b> : une source habituellement fiable rapportant une information probablement vraie.</p>
+        <h3>L'échelle de fiabilité des sources (A-F)</h3>
+        <ul>
+        <li><b>A — Totalement fiable</b> : source éprouvée sur laquelle on peut compter avec confiance.</li>
+        <li><b>B — Habituellement fiable</b> : source ayant fait ses preuves, avec un doute résiduel dans un cas particulier.</li>
+        <li><b>C — Assez fiable</b> : source utilisée occasionnellement, à laquelle un certain degré de confiance peut être accordé.</li>
+        <li><b>D — Rarement fiable</b> : source déjà utilisée mais qui s'est souvent révélée peu fiable.</li>
+        <li><b>E — Non fiable</b> : source qui a prouvé n'être pas digne de confiance.</li>
+        <li><b>F — Fiabilité non estimable</b> : source nouvelle, jamais utilisée — sa fiabilité ne peut être évaluée.</li>
+        </ul>
+        <blockquote>Dans World Monitor, une source inconnue reçoit <b>F</b> par prudence, et l'indice numérique interne va de 1 (A, la plus fiable) à 5 (E) ; F est traité à part comme « non évaluée ».</blockquote>
+        <h3>L'échelle de véracité (1 à 6), pour mémoire</h3>
+        <p>En parallèle, le contenu est coté de <b>1</b> (corroboré par d'autres sources) à <b>6</b> (véracité non estimable), en passant par « probablement vrai », « peut-être vrai », « douteux » et « improbable ». World Monitor se concentre sur la fiabilité de la source (A-F) ; la véracité relève d'une analyse au cas par cas.</p>
+        <h3>Pourquoi séparer les deux ?</h3>
+        <p>Distinguer la fiabilité de la source de la véracité du propos évite un écueil classique : une source très fiable peut se tromper ponctuellement, et une source douteuse peut, à l'occasion, dire vrai. La cotation force à évaluer ces deux dimensions séparément plutôt que de les confondre en un jugement global.</p>`,
       refs: [
-        "World Monitor, catalogue de flux (koala73/worldmonitor).",
-        "Barème naval interne (naval.txt)."
+        "Philippe Capet, Adrien Revault d'Allonnes, « La cotation dans le domaine militaire : doctrines, pratiques et insuffisances », in L'évaluation de l'information — Confiance et défiance, Hermès, 2013 (HAL : hal-01559982).",
+        "OTAN [NAT 03] — doctrine de cotation : fiabilité de la source (A-F, tableau 4.1) et véracité de l'information (1-6, tableau 4.2)."
       ]
     }
   ];
@@ -1818,6 +1821,7 @@ function boot(){
     tab.className = "tab wm-doc";
     tab.dataset.tab = "doc";
     tab.textContent = "📕 Documentation";
+    tab.style.marginLeft = "auto";  // onglet tout à droite
     tabs.appendChild(tab);
 
     var panel = document.createElement("div");
