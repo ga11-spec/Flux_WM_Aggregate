@@ -129,9 +129,14 @@ def build_site(rows, added=0, heavy=False):
 
 
 def passe_traduction(rows):
-    """Passe LÉGÈRE, à chaque exécution : ne traduit que les titres pas encore
-    traduits (langue inconnue, ou non anglais sans titre_vo). Incrémental :
-    une fois l'archive rattrapée, ne concerne plus que les nouveaux titres."""
+    """Passe LÉGÈRE, à chaque exécution. Traite :
+      • les titres pas encore traduits (langue inconnue, ou non anglais sans
+        titre_vo) — incrémental, ne concerne plus que les nouveaux une fois
+        l'archive rattrapée ;
+      • les anciens titres dont la traduction est VISIBLEMENT CASSÉE (boucle
+        « mainstremainstre… », longueur anormale) : on les reprend depuis
+        l'original, et si la re-traduction rate encore, on garde l'original
+        lisible plutôt que le charabia."""
     sys.path.insert(0, str(HERE))
     import traduction
     med_langues = traduction.load_medias_langues()
@@ -139,22 +144,31 @@ def passe_traduction(rows):
     a_traduire = sum(1 for r in rows
                      if (r.get("langue") or "") not in ("", "en")
                      and not (r.get("titre_vo") or "").strip())
-    print(f"titres non anglais en attente de traduction : {a_traduire}")
-    n_trad = 0
+    n_casses = sum(1 for r in rows
+                   if (r.get("titre_vo") or "").strip()
+                   and traduction.traduction_cassee(r.get("titre") or "", r.get("titre_vo")))
+    print(f"à traduire : {a_traduire} · traductions cassées à reprendre : {n_casses}")
+    n_trad, n_repare = 0, 0
     for r in rows:
         lg = (r.get("langue") or "").strip()
-        if not lg or (lg != "en" and not (r.get("titre_vo") or "").strip()):
-            t, vo, lang = traduction.ensure_english(
-                r["titre"], r["nom_du_media"], med_langues)
-            r["langue"] = lang
-            if vo:
-                n_trad += 1
-                r["titre"], r["titre_vo"] = t, vo
-            else:
-                r.setdefault("titre_vo", "")
-    if n_trad:
-        print(f"traduction : {n_trad} titres traduits")
-    return n_trad > 0
+        vo = (r.get("titre_vo") or "").strip()
+        cur = r.get("titre") or ""
+        casse = bool(vo) and traduction.traduction_cassee(cur, vo)
+        if not (not lg or (lg != "en" and not vo) or casse):
+            continue
+        source = vo if vo else cur          # on retraduit depuis l'original si on l'a
+        t, newvo, lang = traduction.ensure_english(source, r["nom_du_media"], med_langues)
+        r["langue"] = lang
+        if casse:
+            n_repare += 1
+        if newvo:                            # traduction propre
+            r["titre"], r["titre_vo"] = t, newvo
+            n_trad += 1
+        else:                                # intraduisible / encore cassée → original lisible
+            r["titre"], r["titre_vo"] = t, ""
+    if n_trad or n_repare:
+        print(f"traduction : {n_trad} titres (re)traduits, dont {n_repare} anciens cassés repris")
+    return (n_trad or n_repare) > 0
 
 
 def migration_complete(rows):

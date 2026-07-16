@@ -5,8 +5,9 @@ Traduction des titres non anglais — Argos Translate (open source, hors-ligne).
 
 Principe éthique : on ne jette aucune langue. Un titre non anglais est traduit
 en anglais (pour la classification et la recherche) ; l'original et la langue
-source sont conservés. Si la traduction est impossible (modèle absent, échec),
-l'article est GARDÉ tel quel, marqué de sa langue.
+source sont conservés. Si la traduction est impossible (modèle absent, échec)
+OU visiblement ratée (boucle de répétition, longueur anormale), l'article est
+GARDÉ avec son titre ORIGINAL lisible, marqué de sa langue.
 
 Détection de langue sans dépendance : alphabets d'abord (grec, cyrillique,
 arabe, hébreu, devanagari, CJK…), puis duel de mots-outils pour les langues
@@ -109,6 +110,32 @@ def detect_lang(titre, media="", medias_langues=None):
     return "en"
 
 
+# ------------------------------------------------ contrôle qualité traduction
+# un fragment de 2 à 20 caractères répété 5 fois ou plus d'affilée
+_LOOP = re.compile(r"(.{2,20}?)\1{4,}")
+
+
+def traduction_cassee(traduit, original=""):
+    """True si la sortie du traducteur est visiblement ratée : boucle de
+    répétition (« mainstremainstre… »), mot unique anormalement long, sortie
+    démesurée par rapport à l'entrée, ou très peu de caractères distincts.
+    Utilisée par ensure_english ET par assembler.py (pour repérer et reprendre
+    les anciennes traductions déjà cassées de l'archive)."""
+    t = (traduit or "").strip()
+    if not t:
+        return True
+    if _LOOP.search(t):                                   # 1) boucle répétée
+        return True
+    if max((len(w) for w in t.split()), default=0) > 45:  # 2) mot géant sans espace
+        return True
+    o = (original or "").strip()
+    if len(t) > 200 and len(t) > 3 * len(o) + 40:         # 3) sortie démesurée
+        return True
+    if len(t) > 60 and len(set(t)) / len(t) < 0.15:       # 4) trop peu de variété
+        return True
+    return False
+
+
 # ---------------------------------------------------------------- traduction
 _ARGOS_OK = None
 _ARGOS_ERR = ""
@@ -161,7 +188,7 @@ def _ensure_model(code):
 
 
 def traduire(titre, code):
-    """Titre traduit en anglais, ou None si impossible."""
+    """Titre traduit en anglais, ou None si impossible / traduction ratée."""
     if code in ("en", "xx") or not _argos():
         return None
     try:
@@ -169,19 +196,23 @@ def traduire(titre, code):
             return None
         import argostranslate.translate as tr
         out = tr.translate(str(titre), code, "en")
-        return out.strip() if out and out.strip() else None
+        out = out.strip() if out else ""
+        return out or None
     except Exception:
         return None
 
 
 def ensure_english(titre, media="", medias_langues=None):
     """→ (titre_pour_classification, titre_vo, langue).
-    Anglais : (titre, '', 'en'). Traduit : (traduction, original, langue).
-    Intraduisible : (titre, '', langue) — l'article est gardé, marqué."""
+    Anglais : (titre, '', 'en'). Traduit OK : (traduction, original, langue).
+    Intraduisible OU traduction ratée : (titre_original, '', langue) — on garde
+    l'original lisible plutôt qu'un charabia, marqué de sa langue."""
     lang = detect_lang(titre, media, medias_langues)
     if lang == "en":
         return titre, "", "en"
     tr = traduire(titre, lang)
-    if tr:
-        return tr, titre, lang
-    return titre, "", lang
+    if tr is None:                      # traduction impossible (modèle absent, échec)
+        return titre, "", lang          #   → titre_vo vide : on retentera plus tard
+    if traduction_cassee(tr, titre):    # traduction VISIBLEMENT ratée (boucle, longueur…)
+        return titre, titre, lang       #   → garde l'original lisible, ne retente plus
+    return tr, titre, lang              # traduction propre
