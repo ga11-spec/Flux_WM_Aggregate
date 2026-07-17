@@ -53,7 +53,7 @@ Haiti: *haiti, *haitian, *port-au-prince
 Hong Kong: *hong kong
 Hungary: *hungary, *hungarian, *budapest, *orban
 Iceland: *iceland, *icelandic, *reykjavik
-India: *india, *indian, *delhi, *modi, india's, india’s, monsoon, reliance, aims, *mumbai, *kashmir, *bollywood, *new delhi, *Andhra Pradesh, *Arunachal Pradesh, *assam, bihar, *chandigarh, *chhattisgarh, *goa, *gujarat, *haryana, *himachal pradesh, *jammu, *cachemire, *harkhand, *karnataka, *kerala, *ladakh, *lakshadweep, *madhya pradesh, *maharashtra, *manipur, *meghalaya, *mizoram, *nagaland, *odisha, *pendjab, *rajasthan, *sikkim, *tamil nadu, *telangana, *tripura, *uttarakhand, *uttar pradesh, *kolkata, *bengal
+India: *india, *indian, *delhi, *modi, india's, india’s, monsoon, reliance, aims, *mumbai, *kashmir, *bollywood, *new delhi, *Andhra Pradesh, *Arunachal Pradesh, *assam, bihar, *chandigarh, *chhattisgarh, *goa, *gujarat, *haryana, *himachal pradesh, *jammu, *cachemire, *harkhand, *karnataka, *kerala, *ladakh, *lakshadweep, *madhya pradesh, *maharashtra, *manipur, *meghalaya, *mizoram, *nagaland, *odisha, *pendjab, *rajasthan, *sikkim, *tamil nadu, *telangana, *tripura, *uttarakhand, *uttar pradesh, *kolkata, *bengal, *kochi, *chennai, *utamm
 Indonesia: *indonesia, *indonesian, *jakarta, *prabowo, msci, emerging
 Iran: *iran, *iranian, *tehran, *khamenei, evacuation, iran's, iran’s, proxies, *irgc, *revolutionary guard, *natanz, *fordow
 Iraq: *iraq, *iraqi, *baghdad, opec
@@ -129,7 +129,7 @@ Thailand: *thailand, *thai, *bangkok
 Tunisia: *tunisia, *tunisian, *tunis
 Turkey: *turkey, *turkish, *ankara, *erdogan, summit, nato, *istanbul
 Uganda: *uganda, *ugandan, *kampala, *museveni
-Ukraine: *ukraine, *ukrainian, *kyiv, *zelensky, crimea, ukraine's, ukraine’s, statement, update, strike, *donbas, *kharkiv, *odesa, *crimea
+Ukraine: *ukraine, *ukrainian, *kyiv, *zelensky, crimea, ukraine's, ukraine’s, statement, update, strike, *donbas, *kharkiv, *odesa, *odessa, *crimea
 United Arab Emirates: *uae, *emirati, *dubai, *abu dhabi, *emirates
 United Kingdom: *uk, *u.k., *britain, *british, *london, *starmer, resign, keir, england, brexit, prime, slides, *england, *scotland, *wales, *manchester, *liverpool, *bbc, *downing street
 United Nations: *united nations
